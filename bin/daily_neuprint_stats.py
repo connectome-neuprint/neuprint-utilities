@@ -85,6 +85,7 @@ def process_data(dataset):
         today = datetime.datetime.today().strftime('%Y-%m-%d')
         logger.warning("Writing " + dataset + " data to config system for " +
                        today)
+        datestruct['update_date'] = str(datetime.datetime.now())
         resp = requests.post(CONFIG['config']['url'] +
         	                 'importjson/neuprint_' + dataset + '/' + today,
                                  {"config": json.dumps(datestruct)})
