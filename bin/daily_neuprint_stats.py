@@ -27,11 +27,11 @@ def call_responder(server, endpoint, payload = ''):
     except requests.exceptions.RequestException as err:
         logger.critical(err)
         sys.exit(-1)
-    if req.status_code == 200:
-        return req.json()
-    else:
+    if req.status_code != 200:
         logger.error('Status: %s', str(req.status_code))
         sys.exit(-1)
+    else:
+        return req.json()
 
 
 def initialize_program():
