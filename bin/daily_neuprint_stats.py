@@ -10,7 +10,7 @@ import requests
 CONFIG = {'config': {'url': 'http://config.int.janelia.org/'}}
 
 
-def call_responder(server, endpoint, payload = ''):
+def call_responder(server, endpoint, payload=''):
     """ Call a responder
         Keyword arguments:
         server: server
@@ -76,16 +76,15 @@ def process_data(dataset):
 	    # 0.5 Assign
         payload['cypher'] = "MATCH (n:`" + datasetn + "`{`" + roi + "`:true}) WHERE n.status=\"0.5assign\"" + suffix
         response = call_responder('neuprint', 'custom/custom', payload)
-        roiass = response['data'][0][0]
+        roidict[roi] = {'0.5assign': response['data'][0][0]}
         # Anchor
         payload['cypher'] = "MATCH (n:`" + datasetn + "`{`" + roi + "`:true}) WHERE n.status=\"Anchor\"" + suffix
         response = call_responder('neuprint', 'custom/custom', payload)
-        roianc = response['data'][0][0]
+        roidict[roi].update({'anchor': response['data'][0][0]})
         # Complete
         payload['cypher'] = "MATCH (n:`" + datasetn + "`{`" + roi + "`:true}) WHERE (n.status=\"Roughly traced\" OR n.status=\"Prelim Roughly traced\" OR n.status=\"Traced\" OR n.status=\"Leaves\")" + suffix
         response = call_responder('neuprint', 'custom/custom', payload)
-        roicomp = response['data'][0][0]
-        roidict[roi] = {'0.5assign': roiass, 'anchor': roianc, "complete": roicomp}
+        roidict[roi].update({'complete': response['data'][0][0]})
         # Traced neurons
         payload['cypher'] = "MATCH (n:`" + datasetn + "`{`" + roi + "`:true}) WHERE (n.status = \"Roughly traced\" OR n.status = \"Prelim Roughly traced\" OR n.status = \"Leaves\" OR n.status = \"Traced\") WITH apoc.convert.fromJsonMap(n.roiInfo) AS roiInfo RETURN sum(roiInfo.`" + roi + "`.pre), sum(roiInfo.`" + roi + "`.post)"
         response = call_responder('neuprint', 'custom/custom', payload)
@@ -103,8 +102,8 @@ def process_data(dataset):
                        today)
         datestruct['update_date'] = str(datetime.datetime.now())
         resp = requests.post(CONFIG['config']['url'] +
-        	                 'importjson/neuprint_' + dataset + '/' + today,
-                                 {"config": json.dumps(datestruct)})
+        	                    'importjson/neuprint_' + dataset + '/' + today,
+                             {"config": json.dumps(datestruct)})
 
 
 if __name__ == '__main__':
