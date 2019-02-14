@@ -101,9 +101,13 @@ def process_data(dataset):
         logger.warning("Writing " + dataset + " data to config system for " +
                        today)
         datestruct['update_date'] = str(datetime.datetime.now())
-        resp = requests.post(CONFIG['config']['url'] +
-        	                    'importjson/neuprint_' + dataset + '/' + today,
-                             {"config": json.dumps(datestruct)})
+        try:
+            requests.post(CONFIG['config']['url'] + 'importjson/neuprint_' +
+                          dataset + '/' + today,
+                          {"config": json.dumps(datestruct)})
+        except requests.exceptions.RequestException as err:
+            logger.critical(err)
+            sys.exit(-1)
 
 
 if __name__ == '__main__':
