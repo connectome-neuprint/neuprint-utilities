@@ -41,10 +41,7 @@ def initialize_program():
     CONFIG = dbc['config']
 
 
-def process_data(dataset):
-    datestruct = dict()
-    datasetn = dataset + '-Neuron'
-    suffix = ' RETURN count(n)'
+def fetch_top_level(payload, datestruct, datasetn, suffix):
     # 0.5 Assign
     payload = {"cypher": "MATCH (n:`" + datasetn + "`{status:\"0.5assign\"})" + suffix}
     response = call_responder('neuprint', 'custom/custom', payload)
@@ -60,6 +57,14 @@ def process_data(dataset):
     response = call_responder('neuprint', 'custom/custom', payload)
     datestruct['traced'] = response['data'][0][0]
     logger.info('traced: ' + str(datestruct['traced']))
+
+
+def process_data(dataset):
+    payload = dict()
+    datestruct = dict()
+    datasetn = dataset + '-Neuron'
+    suffix = ' RETURN count(n)'
+    fetch_top_level(payload, datestruct, datasetn, suffix)
     # Top ROIs
     payload['cypher'] = "MATCH (n:Meta:" + dataset + ") RETURN n.superLevelRois"
     response = call_responder('neuprint', 'custom/custom', payload)
