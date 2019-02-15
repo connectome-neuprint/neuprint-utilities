@@ -8,3 +8,4 @@ install:
   - pip install -r requirements.txt
 script: 
   - pylint --disable=C,W daily_neuprint_stats.py
+  - pylint --disable=C,W hourly_neuprint_stats.py
