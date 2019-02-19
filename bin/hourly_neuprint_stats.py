@@ -49,17 +49,48 @@ def initialize_program():
 
 
 def fetch_top_level(payload, datestruct, datasetn, suffix):
+    traced = ['Prelim Roughly traced', 'Traced', 'Roughly traced']
+    completeness = traced + ['Leaves']
     statuses = ['0.5assign', 'Anchor', 'Leaves', 'Orphan', 'Orphan hotknife',
                 'Prelim Roughly traced', 'Traced', 'Unimportant', 'Roughly traced']
+    statuses = completeness
+    for ctype in ['complete', 'traced']:
+        for ntype in ['pre', 'post']:
+            datestruct['TOTAL_' + ntype + '_' + ctype] = 0
+        datestruct['TOTAL_' + ctype] = 0
+    # <status>.<pre|post>.<complete|traced>
     for status in statuses:
         key = status.lower().replace(' ', '_')
-        payload = {"cypher": "MATCH (n:`" + datasetn + "`{status:\"" + status + "\"})" + suffix}
+        for ntype in ['pre', 'post']:
+                datestruct['.'.join([key, ntype])] = 0
+    # Processing loop
+    for status in statuses:
+        key = status.lower().replace(' ', '_')
+        synapses = {"total": 0, "complete": 0, "traced": 0}
+        payload = {"cypher": "MATCH (n:`" + datasetn + "`{status:\"" + status + "\"})" +
+                       "-[:Contains]->(:SynapseSet)-[:Contains]->(s:Synapse) RETURN count(s)"}
         response = call_responder('neuprint', 'custom/custom', payload)
-        datestruct[key] = response['data'][0][0]
+        for ntype in ['Pre', 'Post']:
+            payload = {"cypher": "MATCH (n:`" + datasetn + "`{status:\"" + status + "\"})" +
+                       "-[:Contains]->(:SynapseSet)-[:Contains]->(s:" + ntype + "Syn) RETURN count(s)"}
+            response = call_responder('neuprint', 'custom/custom', payload)
+            print(key + ', ' + ntype + ' = ' + str(response['data'][0][0]))
+            synapses['total'] += response['data'][0][0]
+            datestruct['.'.join([key, ntype.lower()])] += response['data'][0][0]
+            if status in completeness:
+                datestruct['TOTAL_' + ntype.lower() + '_complete'] += response['data'][0][0]
+                datestruct['TOTAL_complete'] += response['data'][0][0]
+            if status in traced:
+                datestruct['TOTAL_' + ntype.lower() + '_traced'] += response['data'][0][0]
+                datestruct['TOTAL_traced'] += response['data'][0][0]
     payload = {"cypher": "MATCH (n:Meta:" + ARG.DATASET + ") RETURN n.totalPreCount, n.totalPostCount"}
     response = call_responder('neuprint', 'custom/custom', payload)
-    datestruct['total_pre'] = response['data'][0][0]
-    datestruct['total_post'] = response['data'][0][1]
+    datestruct['TOTAL_pre'] = response['data'][0][0]
+    datestruct['TOTAL_post'] = response['data'][0][1]
+    datestruct['TOTAL_synapses'] = response['data'][0][0] + response['data'][0][1]
+    datestruct['INCOMPLETE_pre'] = datestruct['TOTAL_pre'] - datestruct['TOTAL_pre_complete']
+    datestruct['INCOMPLETE_post'] = datestruct['TOTAL_post'] - datestruct['TOTAL_post_complete']
+    datestruct['INCOMPLETE_synapses'] = datestruct['TOTAL_synapses'] - datestruct['TOTAL_complete']
 
 
 def process_data(dataset):
