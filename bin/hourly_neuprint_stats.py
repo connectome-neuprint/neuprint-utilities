@@ -56,6 +56,10 @@ def fetch_top_level(payload, datestruct, datasetn, suffix):
         payload = {"cypher": "MATCH (n:`" + datasetn + "`{status:\"" + status + "\"})" + suffix}
         response = call_responder('neuprint', 'custom/custom', payload)
         datestruct[key] = response['data'][0][0]
+    payload = {"cypher": "MATCH (n:Meta:" + ARG.DATASET + ") RETURN n.totalPreCount, n.totalPostCount"}
+    response = call_responder('neuprint', 'custom/custom', payload)
+    datestruct['total_pre'] = response['data'][0][0]
+    datestruct['total_post'] = response['data'][0][1]
 
 
 def process_data(dataset):
