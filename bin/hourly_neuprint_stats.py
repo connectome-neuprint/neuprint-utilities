@@ -50,9 +50,19 @@ def initialize_program():
 
 def fetch_top_level(payload, datestruct, datasetn, suffix):
     traced = ['Prelim Roughly traced', 'Traced', 'Roughly traced']
-    completeness = traced + ['Leaves']
     statuses = ['0.5assign', 'Anchor', 'Leaves', 'Orphan', 'Orphan hotknife',
                 'Prelim Roughly traced', 'Traced', 'Unimportant', 'Roughly traced']
+    # Neurons
+    datestruct['NEURONS_TOTAL_traced'] = 0
+    for status in statuses:
+        key = status.lower().replace(' ', '_')
+        payload = {"cypher": "MATCH (n:`" + datasetn + "`{status:\"" + status + "\"})" + suffix}
+        response = call_responder('neuprint', 'custom/custom', payload)
+        datestruct['NEURONS_' + key] = response['data'][0][0]
+        if status in traced:
+            datestruct['NEURONS_TOTAL_traced'] += response['data'][0][0]
+    # Synapses
+    completeness = traced + ['Leaves']
     statuses = completeness
     for ctype in ['complete', 'traced']:
         for ntype in ['pre', 'post']:
