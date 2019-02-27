@@ -98,6 +98,8 @@ def fetch_top_level(payload, datestruct, datasetn, suffix):
     datestruct['TOTAL_pre'] = response['data'][0][0]
     datestruct['TOTAL_post'] = response['data'][0][1]
     datestruct['TOTAL_synapses'] = response['data'][0][0] + response['data'][0][1]
+    datestruct['TOTAL_pre_complete_percent'] = '%.3f' % (datestruct['TOTAL_pre'] / datestruct['TOTAL_pre_complete'] * 100.0)
+    datestruct['TOTAL_post_complete_percent'] = '%.3f' % (datestruct['TOTAL_post'] / datestruct['TOTAL_post_complete'] * 100.0)
     datestruct['INCOMPLETE_pre'] = datestruct['TOTAL_pre'] - datestruct['TOTAL_pre_complete']
     datestruct['INCOMPLETE_post'] = datestruct['TOTAL_post'] - datestruct['TOTAL_post_complete']
     datestruct['INCOMPLETE_synapses'] = datestruct['TOTAL_synapses'] - datestruct['TOTAL_complete']
