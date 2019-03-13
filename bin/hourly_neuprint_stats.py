@@ -120,11 +120,11 @@ def process_data(dataset):
     kafka.update(status_counts)
     if ARG.WRITE:
         LOGGER.debug(json.dumps(kafka))
-        future = producer.send('nptest', kafka, str(datetime.datetime.now()))
+        future = producer.send(ARG.TOPIC, kafka, str(datetime.datetime.now()))
         try:
             future.get(timeout=10)
         except KafkaError:
-            LOGGER.critical("Failed!")
+            LOGGER.critical("Failed publishing to %s" % (ARG.TOPIC))
     else:
         LOGGER.info(json.dumps(kafka))
 
@@ -132,7 +132,9 @@ def process_data(dataset):
 if __name__ == '__main__':
     PARSER = argparse.ArgumentParser(description="Write dataset daily stats to config system")
     PARSER.add_argument('--dataset', dest='DATASET', action='store',
-                        default='hemibrain', help='Dataset')
+                        default='hemibrain', help='Dataset [hemibrain]')
+    PARSER.add_argument('--topic', dest='TOPIC', action='store',
+                        default='nptest', help='Kafka topic to publish to [nptest]')
     PARSER.add_argument('--write', dest='WRITE', action='store_true',
                         default=False, help='Write record to config system')
     PARSER.add_argument('--verbose', dest='VERBOSE', action='store_true',
