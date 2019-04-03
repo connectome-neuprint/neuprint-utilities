@@ -34,11 +34,13 @@ Total metrics for synapses are extracted complete and traced statuses, and furth
 - Prelim Roughly traced
 - Traced
 - Roughly traced
+
 "Complete" synapses include "Traced" synapses plus synapses with the status "Leaves". These are stored in the following metrics:
 - TOTAL_pre_complete
 - TOTAL_pre_traced
 - TOTAL_post_complete
 - TOTAL_post_traced
+
 The metrics above are summations of individual numbers from NeuPrint. Below is a sample query for presynaptic with status "Roughly traced":
 
 ```{"cypher": "MATCH (n:`hemibrain-Neuron`{status:'Roughly traced'})-[:Contains]->(:SynapseSet)-[:Contains]->(s:PreSyn) RETURN count(s)"}```
@@ -50,11 +52,10 @@ Total pre- and postsynaptic fragments are extracted from NeuPrint via a Cypher q
 These are stored in three metrics:
 - TOTAL_pre
 - TOTAL_post
-
-TOTAL_synapses is also stored, and is the sum of TOTAL_pre and TOTAL_post.
+- TOTAL_synapses, which is the sum of TOTAL_pre and TOTAL_post
 
 ### Incomplete
-Three values are stored:
+Three metrics are stored:
 - INCOMPLETE_pre = TOTAL_pre - TOTAL_pre_complete
 - INCOMPLETE_post TOTAL_post - TOTAL_post_complete
 - INCOMPLETE_synapses = TOTAL_synapses - TOTAL_complete
