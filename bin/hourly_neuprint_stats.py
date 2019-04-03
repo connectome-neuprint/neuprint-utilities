@@ -63,13 +63,12 @@ def fetch_top_level(payload, datestruct, datasetn, suffix):
             datestruct['NEURONS_TOTAL_traced'] += response['data'][0][0]
     # Synapses
     completeness = traced + ['Leaves']
-    statuses = completeness
     for ctype in ['complete', 'traced']:
         for ntype in ['pre', 'post']:
             datestruct['TOTAL_' + ntype + '_' + ctype] = 0
         datestruct['TOTAL_' + ctype] = 0
     # <status>.<pre|post>.<complete|traced>
-    for status in statuses:
+    for status in completeness:
         key = status.lower().replace(' ', '_')
         for ntype in ['pre', 'post']:
                 datestruct['.'.join([key, ntype])] = 0
@@ -86,7 +85,8 @@ def fetch_top_level(payload, datestruct, datasetn, suffix):
             response = call_responder('neuprint', 'custom/custom', payload)
             print(key + ', ' + ntype + ' = ' + str(response['data'][0][0]))
             synapses['total'] += response['data'][0][0]
-            datestruct['.'.join([key, ntype.lower()])] += response['data'][0][0]
+            if status in completeness:
+                datestruct['.'.join([key, ntype.lower()])] += response['data'][0][0]
             if status in completeness:
                 datestruct['TOTAL_' + ntype.lower() + '_complete'] += response['data'][0][0]
                 datestruct['TOTAL_complete'] += response['data'][0][0]
