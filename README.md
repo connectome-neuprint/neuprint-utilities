@@ -11,7 +11,7 @@ Utility programs for NeuPrint
 Every hour, an entry is made into the nptest* index of ElasticSEarch with metrics data in three categories:
 
 ### Neurons
-These numbers are extracted from NeuPrint via a Cypher query for number of neurons. Here is an example query for the numbber of traced neurons:
+These numbers are extracted from NeuPrint via a Cypher query for number of neurons for a specified status. Here is an example query for the number of traced neurons:
 
 ```{"cypher": "MATCH (n:`hemibrain-Neuron`{status:'Traced'}) RETURN count(n)"}```
 
@@ -29,12 +29,21 @@ The following metrics are stored:
 NEURONS_TOTAL_traced is also stored, and is the sum of NEURONS_prelim_roughly_traced, NEURONS_roughly_traced, and NEURONS_traced.
 
 ### Totals
-TOTAL_pre_complete = 'Prelim Roughly traced', 'Traced', 'Roughly traced', 'Leaves'
-TOTAL_pre_traced = 'Prelim Roughly traced', 'Traced', 'Roughly traced'
-TOTAL_post_complete = 'Prelim Roughly traced', 'Traced', 'Roughly traced', 'Leaves'
-TOTAL_post_traced = 'Prelim Roughly traced', 'Traced', 'Roughly traced'
+Total metrics for synapses are extracted complete and traced statuses, and further subdivided into pre- and postsynaptic metrics.
+"Traced" synapses are in one of the following statuses:
+- Prelim Roughly traced
+- Traced
+- Roughly traced
+"Complete" synapses include "Traced" synapses plus synapses with the status "Leaves". These are stored in the following metrics:
+- TOTAL_pre_complete
+- TOTAL_pre_traced
+- TOTAL_post_complete
+- TOTAL_post_traced
+The metrics above are summations of individual numbers from NeuPrint. Below is a sample query for presynaptic with status "Roughly traced":
 
-Total pre- and post-synaptic fragments are extracted from NeuPrint via a Cypher query:
+```{"cypher": "MATCH (n:`hemibrain-Neuron`{status:'Roughly traced'})-[:Contains]->(:SynapseSet)-[:Contains]->(s:PreSyn) RETURN count(s)"}```
+
+Total pre- and postsynaptic fragments are extracted from NeuPrint via a Cypher query:
 
 ```{"cypher": "MATCH (n:Meta:hemibrain) RETURN n.totalPreCount, n.totalPostCount"}```
 
