@@ -73,18 +73,13 @@ def fetch_top_level(payload, datestruct, datasetn, suffix):
         for ntype in ['pre', 'post']:
                 datestruct['.'.join([key, ntype])] = 0
     # Processing loop
-    for status in statuses:
+    for status in completeness:
         key = status.lower().replace(' ', '_')
-        synapses = {"total": 0, "complete": 0, "traced": 0}
-        payload = {"cypher": "MATCH (n:`" + datasetn + "`{status:\"" + status + "\"})" +
-                       "-[:Contains]->(:SynapseSet)-[:Contains]->(s:Synapse) RETURN count(s)"}
-        response = call_responder('neuprint', 'custom/custom', payload)
         for ntype in ['Pre', 'Post']:
             payload = {"cypher": "MATCH (n:`" + datasetn + "`{status:\"" + status + "\"})" +
                        "-[:Contains]->(:SynapseSet)-[:Contains]->(s:" + ntype + "Syn) RETURN count(s)"}
             response = call_responder('neuprint', 'custom/custom', payload)
             print(key + ', ' + ntype + ' = ' + str(response['data'][0][0]))
-            synapses['total'] += response['data'][0][0]
             if status in completeness:
                 datestruct['.'.join([key, ntype.lower()])] += response['data'][0][0]
             if status in completeness:
