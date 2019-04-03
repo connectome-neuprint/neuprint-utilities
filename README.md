@@ -29,6 +29,11 @@ The following metrics are stored:
 NEURONS_TOTAL_traced is also stored, and is the sum of NEURONS_prelim_roughly_traced, NEURONS_roughly_traced, and NEURONS_traced.
 
 ### Totals
+TOTAL_pre_complete = 'Prelim Roughly traced', 'Traced', 'Roughly traced', 'Leaves'
+TOTAL_pre_traced = 'Prelim Roughly traced', 'Traced', 'Roughly traced'
+TOTAL_post_complete = 'Prelim Roughly traced', 'Traced', 'Roughly traced', 'Leaves'
+TOTAL_post_traced = 'Prelim Roughly traced', 'Traced', 'Roughly traced'
+
 Total pre- and post-synaptic fragments are extracted from NeuPrint via a Cypher query:
 
 ```{"cypher": "MATCH (n:Meta:hemibrain) RETURN n.totalPreCount, n.totalPostCount"}```
