@@ -7,10 +7,11 @@
 ## Summary
 Utility programs for NeuPrint
 
-## Stored data
+## hourly_neuprint_stats.py
+### Stored data
 Every hour, an entry is made into the nptest* index of ElasticSEarch with metrics data in three categories:
 
-### Neurons
+#### Neurons
 These numbers are extracted from NeuPrint via a Cypher query for number of neurons for a specified status. Here is an example query for the number of traced neurons:
 
 ```{"cypher": "MATCH (n:`hemibrain-Neuron`{status:'Traced'}) RETURN count(n)"}```
@@ -28,7 +29,7 @@ The following metrics are stored:
 
 NEURONS_TOTAL_traced is also stored, and is the sum of NEURONS_prelim_roughly_traced, NEURONS_roughly_traced, and NEURONS_traced.
 
-### Totals
+#### Totals
 Total metrics for synapses are extracted complete and traced statuses, and further subdivided into pre- and postsynaptic metrics.
 "Traced" synapses are in one of the following statuses:
 - Prelim Roughly traced
@@ -54,7 +55,7 @@ These are stored in three metrics:
 - TOTAL_post
 - TOTAL_synapses, which is the sum of TOTAL_pre and TOTAL_post
 
-### Incomplete
+#### Incomplete
 Three metrics are stored:
 - INCOMPLETE_pre = TOTAL_pre - TOTAL_pre_complete
 - INCOMPLETE_post TOTAL_post - TOTAL_post_complete
