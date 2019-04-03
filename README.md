@@ -10,8 +10,10 @@ Utility programs for NeuPrint
 Every hour, an entry is made into the nptest* index of ElasticSEarch with metrics data in three categories:
 
 ### Neurons
-These numbers are extracted from NeuPrint via a Cypher query for number of neurons. Here is an example query for the numbber of traced nuurons:
+These numbers are extracted from NeuPrint via a Cypher query for number of neurons. Here is an example query for the numbber of traced neurons:
+
 ```{"cypher": "MATCH (n:`hemibrain-Neuron`{status:'Traced'}) RETURN count(n)"}```
+
 The following metrics are stored:
 - NEURONS_0.5assign
 - NEURONS_anchor
@@ -22,6 +24,7 @@ The following metrics are stored:
 - NEURONS_roughly_traced
 - NEURONS_traced
 - NEURONS_unimportant
+
 NEURONS_TOTAL_traced is also stored, and is the sum of NEURONS_prelim_roughly_traced, NEURONS_roughly_traced, and NEURONS_traced.
 
 ### Incomplete
