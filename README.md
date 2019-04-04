@@ -6,3 +6,5 @@
 
 ## Summary
 Utility programs for NeuPrint
+
+For more information, see the [Wiki](https://github.com/connectome-neuprint/neuprint-utilities/wiki)
