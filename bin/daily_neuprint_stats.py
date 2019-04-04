@@ -78,7 +78,7 @@ def process_data(dataset):
     count = 1
     for roi in rois:
         logger.info('Fetching data for ROI ' + roi + ' (' + str(count) + '/' + str(len(rois)) + ')')
-	    # 0.5 Assign
+        # 0.5 Assign
         payload['cypher'] = "MATCH (n:`" + datasetn + "`{`" + roi + "`:true}) WHERE n.status=\"0.5assign\"" + suffix
         response = call_responder('neuprint', 'custom/custom', payload)
         roidict[roi] = {'0.5assign': response['data'][0][0]}
