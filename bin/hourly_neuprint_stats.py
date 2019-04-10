@@ -129,7 +129,7 @@ if __name__ == '__main__':
     PARSER.add_argument('--dataset', dest='DATASET', action='store',
                         default='hemibrain', help='Dataset [hemibrain]')
     PARSER.add_argument('--topic', dest='TOPIC', action='store',
-                        default='nptest', help='Kafka topic to publish to [nptest]')
+                        default='neuprint_hourly_metrics', help='Kafka topic to publish to [nptest]')
     PARSER.add_argument('--write', dest='WRITE', action='store_true',
                         default=False, help='Write record to config system')
     PARSER.add_argument('--verbose', dest='VERBOSE', action='store_true',
