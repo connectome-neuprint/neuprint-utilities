@@ -51,7 +51,8 @@ def initialize_program():
 def fetch_top_level(payload, datestruct, datasetn, suffix):
     traced = ['Prelim Roughly traced', 'Traced', 'Roughly traced']
     statuses = ['0.5assign', 'Anchor', 'Leaves', 'Orphan', 'Orphan hotknife',
-                'Prelim Roughly traced', 'Traced', 'Unimportant', 'Roughly traced']
+                'Prelim Roughly traced', 'Putative Leaves', 'Traced',
+                'Unimportant', 'Roughly traced']
     # Neurons
     datestruct['NEURONS_TOTAL_traced'] = 0
     for status in statuses:
