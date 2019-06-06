@@ -20,7 +20,7 @@ def call_responder(server, endpoint, payload=''):
         Keyword arguments:
         server: server
         endpoint: REST endpoint
-        psyload: POST payload
+        payload: POST payload
     """
     url = CONFIG[server]['url'] + endpoint
     try:
