@@ -89,7 +89,7 @@ def fetch_top_level(payload, datestruct, datasetn, suffix):
             if status in traced:
                 datestruct['TOTAL_' + ntype.lower() + '_traced'] += response['data'][0][0]
                 datestruct['TOTAL_traced'] += response['data'][0][0]
-    payload = {"cypher": "MATCH (n:Meta:" + ARG.DATASET + ") RETURN n.totalPreCount, n.totalPostCount"}
+    payload = {"cypher": "MATCH (n:" + ARG.DATASET + "_Meta) RETURN n.totalPreCount, n.totalPostCount"}
     response = call_responder('neuprint', 'custom/custom', payload)
     datestruct['TOTAL_pre'] = response['data'][0][0]
     datestruct['TOTAL_post'] = response['data'][0][1]

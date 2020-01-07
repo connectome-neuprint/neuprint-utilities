@@ -66,7 +66,7 @@ def process_data(dataset):
     suffix = ' RETURN count(n)'
     fetch_top_level(payload, datestruct, datasetn, suffix)
     # Top ROIs
-    payload['cypher'] = "MATCH (n:Meta:" + dataset + ") RETURN n.superLevelRois"
+    payload['cypher'] = "MATCH (n:" + dataset + "_Meta) RETURN n.superLevelRois"
     response = call_responder('neuprint', 'custom/custom', payload)
     rois = response['data'][0][0]
     # ROI info
