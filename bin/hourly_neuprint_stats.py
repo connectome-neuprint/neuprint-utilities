@@ -55,9 +55,10 @@ def fetch_top_level(payload, datestruct, datasetn, suffix):
                 'Unimportant', 'Roughly traced']
     # Neurons
     datestruct['NEURONS_TOTAL_traced'] = 0
+    payload["dataset"] = ARG.DATASET
     for status in statuses:
         key = status.lower().replace(' ', '_')
-        payload = {"cypher": "MATCH (n:`" + datasetn + "`{status:\"" + status + "\"})" + suffix}
+        payload["cypher"] = "MATCH (n:`" + datasetn + "`{status:\"" + status + "\"})" + suffix
         response = call_responder('neuprint', 'custom/custom', payload)
         datestruct['NEURONS_' + key] = response['data'][0][0]
         if status in traced:
@@ -77,8 +78,7 @@ def fetch_top_level(payload, datestruct, datasetn, suffix):
     for status in completeness:
         key = status.lower().replace(' ', '_')
         for ntype in ['Pre', 'Post']:
-            payload = {"cypher": "MATCH (n:`" + datasetn + "`{status:\"" + status + "\"})" +
-                       "-[:Contains]->(:SynapseSet)-[:Contains]->(s:" + ntype + "Syn) RETURN count(s)"}
+            payload["cypher"] = "MATCH (n:`" + datasetn + "`{status:\"" + status + "\"})" + "-[:Contains]->(:SynapseSet)-[:Contains]->(s:" + ntype + "Syn) RETURN count(s)"
             response = call_responder('neuprint', 'custom/custom', payload)
             print(key + ', ' + ntype + ' = ' + str(response['data'][0][0]))
             if status in completeness:
@@ -89,7 +89,7 @@ def fetch_top_level(payload, datestruct, datasetn, suffix):
             if status in traced:
                 datestruct['TOTAL_' + ntype.lower() + '_traced'] += response['data'][0][0]
                 datestruct['TOTAL_traced'] += response['data'][0][0]
-    payload = {"cypher": "MATCH (n:" + ARG.DATASET + "_Meta) RETURN n.totalPreCount, n.totalPostCount"}
+    payload["cypher"] = "MATCH (n:" + ARG.DATASET + "_Meta) RETURN n.totalPreCount, n.totalPostCount"
     response = call_responder('neuprint', 'custom/custom', payload)
     datestruct['TOTAL_pre'] = response['data'][0][0]
     datestruct['TOTAL_post'] = response['data'][0][1]
@@ -108,7 +108,7 @@ def process_data(dataset):
                                  bootstrap_servers=BROKERS)
     payload = dict()
     status_counts = dict()
-    datasetn = dataset + '-Neuron'
+    datasetn = 'Neuron'
     suffix = ' RETURN count(n)'
     fetch_top_level(payload, status_counts, datasetn, suffix)
     kafka = {"client": 'hourly_neuprint_stats', "user": getpass.getuser(),
