@@ -21,6 +21,7 @@ def call_responder(server, endpoint, payload=''):
     try:
         if payload:
             headers = {"Content-type": "application/json", "Authorization": "Bearer " + CONFIG[server]['bearer']}
+            logger.debug(payload)
             req = requests.post(url, headers=headers, json=payload)
         else:
             req = requests.get(url)
@@ -42,18 +43,20 @@ def initialize_program():
 
 
 def fetch_top_level(payload, datestruct, datasetn, suffix):
+    payload['dataset'] = ARG.DATASET
     # 0.5 Assign
-    payload = {"cypher": "MATCH (n:`" + datasetn + "`{status:\"0.5assign\"})" + suffix}
+    payload = {"cypher": "MATCH (n :" + datasetn + "{status:\"0.5assign\"})" + suffix}
     response = call_responder('neuprint', 'custom/custom', payload)
     datestruct['0.5assign'] = response['data'][0][0]
     logger.info('0.5assign: ' + str(datestruct['0.5assign']))
     # Anchors
-    payload['cypher'] = "MATCH (n:`" + datasetn + "`{status:\"Anchor\"})" + suffix
+    payload['cypher'] = "MATCH (n :" + datasetn + "{status:\"Anchor\"})" + suffix
     response = call_responder('neuprint', 'custom/custom', payload)
     datestruct['anchor'] = response['data'][0][0]
     logger.info('anchor: ' + str(datestruct['anchor']))
     # Traced neurons
-    payload['cypher'] = "MATCH (n:`" + datasetn + "`) WHERE (n.status=\"Roughly traced\" OR n.status=\"Prelim Roughly traced\" OR n.status=\"Traced\")" + suffix
+    #payload['cypher'] = "MATCH (n:`" + datasetn + "`) WHERE (n.status=\"Roughly traced\" OR n.status=\"Prelim Roughly traced\" OR n.status=\"Traced\")" + suffix
+    payload['cypher'] = "MATCH (n :" + datasetn + ") WHERE (n.status=\"Roughly traced\" OR n.status=\"Prelim Roughly traced\" OR n.status=\"Traced\")" + suffix
     response = call_responder('neuprint', 'custom/custom', payload)
     datestruct['traced'] = response['data'][0][0]
     logger.info('traced: ' + str(datestruct['traced']))
@@ -62,7 +65,7 @@ def fetch_top_level(payload, datestruct, datasetn, suffix):
 def process_data(dataset):
     payload = dict()
     datestruct = dict()
-    datasetn = dataset + '-Neuron'
+    datasetn = 'Neuron'
     suffix = ' RETURN count(n)'
     fetch_top_level(payload, datestruct, datasetn, suffix)
     # Top ROIs
@@ -70,7 +73,7 @@ def process_data(dataset):
     response = call_responder('neuprint', 'custom/custom', payload)
     rois = response['data'][0][0]
     # ROI info
-    payload['cypher'] = "MATCH (n:Meta:" + dataset + ") RETURN n.roiInfo"
+    payload['cypher'] = "MATCH (n:Meta) RETURN n.roiInfo"
     response = call_responder('neuprint', 'custom/custom', payload)
     totaldict = json.loads(response['data'][0][0])
     #rois = totaldict.keys()
