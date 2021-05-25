@@ -90,12 +90,12 @@ def generate_uid(deployment_context=2, last_uid=None):
           UID
     """
     current_time_offset = 921700000000
-    max_tries = 15
+    max_tries = 1023
     current_index = 0
     try:
         hostname = socket.gethostname()
         ipa = socket.gethostbyname(hostname)
-    except Exception as err:
+    except Exception:
         ipa = socket.gethostbyname('localhost')
     ip_component = int(ipa.split('.')[-1]) & 0xFF
     #ip_component = 71 #PLUG
@@ -109,11 +109,11 @@ def generate_uid(deployment_context=2, last_uid=None):
         LOGGER.debug("ip_component: {0:b}".format(ip_component))
         next_uid = time_component + (current_index << 12) + (deployment_context << 8) + ip_component
         if last_uid and last_uid == next_uid:
-            LOGGER.debug("Soft collision %d (%d)" % (last_uid, current_index))
+            LOGGER.debug("Soft collision %d (%d)", last_uid, current_index)
             next_uid = None
             current_index += 1
         if not next_uid and (current_index > max_tries):
-            LOGGER.debug("Hard collision %d (%d)" % (last_uid, current_index))
+            LOGGER.debug("Hard collision %d (%d)", last_uid, current_index)
             time.sleep(0.5)
             current_index = 0
     if not next_uid:
@@ -126,6 +126,16 @@ def generate_uid(deployment_context=2, last_uid=None):
     else:
         KEYS[next_uid] = 1
     return next_uid
+
+
+def to_datetime(dt_string):
+    """ Convert a string to a datetime object
+        Keyword arguments:
+          dt_string: datetime string
+        Returns:
+          datetime object
+    """
+    return datetime.strptime(dt_string.replace('T', ' '), "%Y-%m-%d %H:%M:%S")
 
 
 def setup_dataset(dataset, published):
@@ -153,8 +163,8 @@ def setup_dataset(dataset, published):
                    "ownerKey": "group:flyem", "readers": ["group:flyem"],
                    "writers": ["group:flyem"],
                    "name" : result['dataset'], "version": version,
-                   "creationDate": result['lastDatabaseEdit'],
-                   "updatedDate": result['lastDatabaseEdit'],
+                   "creationDate": to_datetime(result['lastDatabaseEdit']),
+                   "updatedDate": to_datetime(result['lastDatabaseEdit']),
                    "published": published
                   }
         if published:
@@ -169,15 +179,17 @@ def setup_dataset(dataset, published):
         if post_id != last_uid:
             LOGGER.critical("Could not insert to Mongo with requested _id")
             sys.exit(0)
-        LOGGER.info("Inserted dataset %s (UID: %s)", dataset, post_id)
+        LOGGER.info("Inserted dataset %s (UID: %s, datetime: %sß)", dataset, post_id,
+                    result['lastDatabaseEdit'])
         action = 'insert'
     else:
         LOGGER.info("%s already exists in Mongo (UID: %s)", dataset, check['_id'])
         last_uid = check['_id']
-        if result['lastDatabaseEdit'] > check['updatedDate']:
-            LOGGER.warning("update required for %s (last changed %s)",
-                           dataset, check['updatedDate'])
-            payload = {"updatedDate": result['lastDatabaseEdit']}
+        neuprint_dt = to_datetime(result['lastDatabaseEdit'])
+        if neuprint_dt > check['updatedDate']:
+            LOGGER.warning("Update required for %s (last changed %s)",
+                           dataset, result['lastDatabaseEdit'])
+            payload = {"updatedDate": neuprint_dt}
             if ARG.WRITE:
                 coll.update_one({"_id": check['_id']},
                                 {"$set": payload})
@@ -242,9 +254,8 @@ def insert_body(payload, body, last_uid):
     """
     for idx, name in enumerate(COLUMN):
         payload[name] = None if body[idx] is None else str(body[idx])
-    now = datetime.now().isoformat()
-    payload["creationDate"] = now
-    payload["updatedDate"] = now
+    payload["creationDate"] = datetime.now()
+    payload["updatedDate"] = datetime.now()
     LOGGER.debug(payload)
     last_uid = generate_uid(last_uid=last_uid)
     payload['_id'] = last_uid
@@ -257,6 +268,7 @@ def insert_body(payload, body, last_uid):
         LOGGER.error("Inserted UID %s does not match calculated UID %d", post_id, last_uid)
     LOGGER.debug("Inserted %s for %s", post_id, str(body[0]))
     COUNT['insert'] += 1
+    sys.exit(0)
     return last_uid
 
 
@@ -268,8 +280,7 @@ def update_body(uid, payload):
         Returns:
           None
     """
-    now = datetime.now().isoformat()
-    payload["updatedDate"] = now
+    payload["updatedDate"] = datetime.now()
     if ARG.WRITE:
         result = DBM.emBody.update_one({"_id": uid},
                                        {"$set": payload})
