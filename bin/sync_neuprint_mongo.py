@@ -268,7 +268,6 @@ def insert_body(payload, body, last_uid):
         LOGGER.error("Inserted UID %s does not match calculated UID %d", post_id, last_uid)
     LOGGER.debug("Inserted %s for %s", post_id, str(body[0]))
     COUNT['insert'] += 1
-    sys.exit(0)
     return last_uid
 
 
