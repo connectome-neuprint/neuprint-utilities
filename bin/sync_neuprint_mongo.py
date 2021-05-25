@@ -175,6 +175,8 @@ def setup_dataset(dataset, published):
         LOGGER.info("%s already exists in Mongo (UID: %s)", dataset, check['_id'])
         last_uid = check['_id']
         if result['lastDatabaseEdit'] > check['updatedDate']:
+            LOGGER.warning("update required for %s (last changed %s)",
+                           dataset, check['updatedDate'])
             payload = {"updatedDate": result['lastDatabaseEdit']}
             if ARG.WRITE:
                 coll.update_one({"_id": check['_id']},
@@ -358,12 +360,10 @@ def update_bodies(bodies, published, dataset, dataset_uid, neuprint_bodyset):
         # status, type, instance
         for idx in range(1, len(COLUMN)):
             if body[idx] != mrow[COLUMN[idx]]:
-                LOGGER.info("Change %s from %s to %s", COLUMN[idx], mrow[COLUMN[idx]], body[idx])
+                LOGGER.info("Change %s from %s to %s for %s", COLUMN[idx],
+                            mrow[COLUMN[idx]], body[idx], str(body[0]))
                 payload[COLUMN[idx]] = body[idx]
         if payload:
-            print(body)
-            print(mrow)
-            sys.exit(0)
             update_body(mrow["_id"], payload)
 
 
