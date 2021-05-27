@@ -407,8 +407,8 @@ def get_metadata():
         ARG.SERVER = "https://neuprint%s.janelia.org" % ('-pre' if ARG.NEUPRINT == 'pre' else '')
     if ARG.NEUPRINT == "pre":
         LOGGER.info("Finding public body IDs")
-        CONFIG['neuprintprod'] = {'url': "https://neuprint.janelia.org/api/"}
-        response = call_responder('neuprintprod', 'dbmeta/datasets')
+        CONFIG['neuprint'] = {'url': 'https://neuprint.janelia.org/api/'}
+        response = call_responder('neuprint', 'dbmeta/datasets')
         for dataset in response:
             print(dataset)
     CONFIG['neuprint'] = {'url': ARG.SERVER + '/api/'}
