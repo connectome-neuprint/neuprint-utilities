@@ -21,6 +21,7 @@ JWT = 'NEUPRINT_APPLICATION_CREDENTIALS'
 KEYS = dict()
 # Database
 DBM = ''
+EXISTING_BODY = dict()
 # Mapping of NeuPrint column number to Mongo name
 COLUMN = ["name", "status", "neuronType", "neuronInstance"]
 
@@ -288,20 +289,23 @@ def update_body(uid, payload):
         COUNT['update'] += 1
 
 
-def get_body_payload_initial(dataset, dataset_uid):
+def get_body_payload_initial(dataset, dataset_uid, published):
     """ Create an initial body payload
         Keyword arguments:
           dataset: dataset
           dataset_uid: dataset UID
+          published: True=public, False=private
         Returns:
           body_payload: initial body payload
     """
     data_set_ref = "EMDataSet#%d" % (dataset_uid)
     body_payload = {"class": "org.janelia.model.domain.flyem.EMBody",
                     "dataSetIdentifier": dataset,
-                    "ownerKey": "group.flyem", "readers": ["group.flyem"],
-                    "writers": ["group.flyem"], "dataSetRef": data_set_ref,
+                    "ownerKey": "group:flyem", "readers": ["group:flyem"],
+                    "writers": ["group:flyem"], "dataSetRef": data_set_ref,
                    }
+    if published:
+        body_payload['readers'] = ["group:flyem", "group:workstation_users"]
     return body_payload
 
 
@@ -316,9 +320,7 @@ def insert_bodies(bodies, published, dataset, dataset_uid):
           None
     """
     last_uid = None
-    body_payload = get_body_payload_initial(dataset, dataset_uid)
-    if published:
-        body_payload['readers'] = ["group:flyem", "group:workstation_users"]
+    body_payload = get_body_payload_initial(dataset, dataset_uid, published)
     for body in tqdm(bodies):
         payload = dict(body_payload)
         last_uid = insert_body(payload, body, last_uid)
@@ -341,9 +343,7 @@ def update_bodies(bodies, published, dataset, dataset_uid, neuprint_bodyset):
     diff = [int(bid) for bid in neuprint_bodyset.difference(mongo_bodyset)]
     if diff:
         LOGGER.warning("Bodies to add to Mongo: %d", len(diff))
-        body_payload = get_body_payload_initial(dataset, dataset_uid)
-        if published:
-            body_payload['readers'] = ["group:flyem", "group:workstation_users"]
+        body_payload = get_body_payload_initial(dataset, dataset_uid, published)
         last_uid = None
         for body in tqdm(bodies):
             if body[0] in diff:
@@ -405,8 +405,15 @@ def get_metadata():
     """
     if not ARG.SERVER:
         ARG.SERVER = "https://neuprint%s.janelia.org" % ('-pre' if ARG.NEUPRINT == 'pre' else '')
+    if ARG.NEUPRINT == "pre":
+        LOGGER.info("Finding public body IDs")
+        CONFIG['neuprintprod'] = {'url': "https://neuprint.janelia.org/api/"}
+        response = call_responder('neuprintprod', 'dbmeta/datasets')
+        for dataset in response:
+            print(dataset)
     CONFIG['neuprint'] = {'url': ARG.SERVER + '/api/'}
     response = call_responder('neuprint', 'dbmeta/datasets')
+    sys.exit(0)
     for dataset in response:
         if ARG.RELEASE and ARG.RELEASE != dataset:
             continue
