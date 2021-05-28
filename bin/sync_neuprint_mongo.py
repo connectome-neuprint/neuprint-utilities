@@ -179,7 +179,7 @@ def setup_dataset(dataset, published):
             post_id = last_uid
         if post_id != last_uid:
             LOGGER.critical("Could not insert to Mongo with requested _id")
-            sys.exit(0)
+            sys.exit(-1)
         LOGGER.info("Inserted dataset %s (UID: %s, datetime: %sß)", dataset, post_id,
                     result['lastDatabaseEdit'])
         action = 'insert'
@@ -428,7 +428,10 @@ def get_metadata():
     for dataset in response:
         if ARG.RELEASE and ARG.RELEASE != dataset:
             continue
-        process_dataset(dataset, 'neuprint-pre' not in ARG.SERVER)
+        if ARG.NEUPRINT == "pre" and dataset in EXISTING_BODY:
+            LOGGER.warning("Skipping prepublishing release %s", dataset)
+            continue
+        process_dataset(dataset, '-pre' not in ARG.SERVER)
     print(COUNT)
 
 
