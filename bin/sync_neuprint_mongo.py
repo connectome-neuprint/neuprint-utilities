@@ -141,13 +141,13 @@ def to_datetime(dt_string):
 
 
 def setup_dataset(dataset, published):
-    """ Insert or update a dataset in Mongo
+    """ Insert or update a data set in Mongo
         Keyword arguments:
-          dataset: dataset
+          dataset: data set
           published: True=public, False=private
         Returns:
           last_uid: last UID assigned
-          action: what to do with bodies in this dataset (ignore, insert, or update)
+          action: what to do with bodies in this data set (ignore, insert, or update)
     """
     npc = Client(ARG.SERVER, dataset=dataset)
     result = fetch_meta(client=npc)
@@ -181,7 +181,7 @@ def setup_dataset(dataset, published):
         if post_id != last_uid:
             LOGGER.critical("Could not insert to Mongo with requested _id")
             sys.exit(-1)
-        LOGGER.info("Inserted dataset %s (UID: %s, datetime: %sß)", dataset, post_id,
+        LOGGER.info("Inserted data set %s (UID: %s, datetime: %s)", dataset, post_id,
                     result['lastDatabaseEdit'])
         action = 'insert'
     else:
@@ -208,8 +208,8 @@ def setup_dataset(dataset, published):
 def fetch_mongo_bodies(dataset, dataset_uid):
     """ Create a dictionary (keyed by body ID) and set of bodies from Mongo
         Keyword arguments:
-          dataset: dataset
-          dataset_uid: dataset UID
+          dataset: data set
+          dataset_uid: data set UID
         Returns:
           rowdict: dictionary of rows from Mongo
           mongo_bodyset: set of body IDs
@@ -227,7 +227,7 @@ def fetch_mongo_bodies(dataset, dataset_uid):
 def fetch_neuprint_bodies(dataset):
     """ Create a dictionary (keyed by body ID) and set of bodies from NeuPrint
         Keyword arguments:
-          dataset: dataset
+          dataset: data set
         Returns:
           result: dictionary of rows from NeuPrint
           neuprint_bodyset: set of body IDs
@@ -255,7 +255,8 @@ def insert_body(payload, body, last_uid):
           Inserted UID
     """
     # Uncomment this to check public data set for every body ID
-    #if payload['dataSetIdentifier'] in EXISTING_BODY and str(body[0]) in EXISTING_BODY[payload['dataSetIdentifier']]:
+    #if payload['dataSetIdentifier'] in EXISTING_BODY and
+    #   str(body[0]) in EXISTING_BODY[payload['dataSetIdentifier']]:
     #    COUNT['published'] += 1
     #    return
     for idx, name in enumerate(COLUMN):
@@ -302,8 +303,8 @@ def update_body(uid, payload):
 def get_body_payload_initial(dataset, dataset_uid, published):
     """ Create an initial body payload
         Keyword arguments:
-          dataset: dataset
-          dataset_uid: dataset UID
+          dataset: data set
+          dataset_uid: data set UID
           published: True=public, False=private
         Returns:
           body_payload: initial body payload
@@ -324,8 +325,8 @@ def insert_bodies(bodies, published, dataset, dataset_uid):
         Keyword arguments:
           bodies: list of bodies from NeuPrint
           published: True=public, False=private
-          dataset: dataset
-          dataset_uid: dataset UID from Mongo
+          dataset: data set
+          dataset_uid: data set UID from Mongo
         Returns:
           None
     """
@@ -337,12 +338,12 @@ def insert_bodies(bodies, published, dataset, dataset_uid):
 
 
 def update_bodies(bodies, published, dataset, dataset_uid, neuprint_bodyset):
-    """ Insert or update a dataset in Mongo
+    """ Insert or update a data set in Mongo
         Keyword arguments:
           bodies: list of bodies from NeuPrint
           published: True=public, False=private
-          dataset: dataset
-          dataset_uid: dataset UID from Mongo
+          dataset: datas et
+          dataset_uid: data set UID from Mongo
           neuprint_bodyset: set of NeuPrint body IDs
         Returns:
           None
@@ -380,7 +381,7 @@ def update_bodies(bodies, published, dataset, dataset_uid, neuprint_bodyset):
         # status, type, instance
         for idx in range(1, len(COLUMN)):
             if COLUMN[idx] not in mrow:
-                #LOGGER.info("Added new column %s (%s) to %s", COLUMN[idx], body[idx], str(body[0]))
+                LOGGER.info("Added new column %s (%s) to %s", COLUMN[idx], body[idx], str(body[0]))
                 payload[COLUMN[idx]] = body[idx]
             elif body[idx] != mrow[COLUMN[idx]]:
                 LOGGER.info("Change %s from %s to %s for %s", COLUMN[idx],
@@ -391,9 +392,9 @@ def update_bodies(bodies, published, dataset, dataset_uid, neuprint_bodyset):
 
 
 def process_dataset(dataset, published=True):
-    """ Process a single dataset
+    """ Process a single data set
         Keyword arguments:
-          dataset: dataset
+          dataset: data set
           published: True=public, False=private [True]
         Returns:
           None
@@ -410,6 +411,12 @@ def process_dataset(dataset, published=True):
 
 
 def get_public_body_ids():
+    """ Populate EXISTING_BODY with a list of public data sets
+        Keyword arguments:
+          None
+        Returns:
+          None
+    """
     save_server = ARG.SERVER
     ARG.SERVER = 'https://neuprint.janelia.org'
     LOGGER.info("Finding public body IDs")
@@ -425,7 +432,7 @@ def get_public_body_ids():
 
 
 def get_metadata():
-    """ Update data in MongoDB for datasets known to one NeuPrint server
+    """ Update data in MongoDB for data sets known to one NeuPrint server
         Keyword arguments:
           None
         Returns:
