@@ -16,7 +16,7 @@ from tqdm import tqdm
 
 # Configuration
 CONFIG = {'config': {'url': 'http://config.int.janelia.org/'}}
-COUNT = {'mongo': 0, 'neuprint': 0, 'delete': 0, 'insert': 0, 'update': 0}
+COUNT = {'mongo': 0, 'neuprint': 0, 'delete': 0, 'insert': 0, 'update': 0, 'published': 0}
 JWT = 'NEUPRINT_APPLICATION_CREDENTIALS'
 KEYS = dict()
 # Database
@@ -253,6 +253,9 @@ def insert_body(payload, body, last_uid):
         Returns:
           Inserted UID
     """
+    if payload['dataSetIdentifier'] in EXISTING_BODY and str(body[0]) in EXISTING_BODY[payload['dataSetIdentifier']]:
+        COUNT['published'] += 1
+        return
     for idx, name in enumerate(COLUMN):
         payload[name] = None if body[idx] is None else str(body[idx])
     payload["creationDate"] = datetime.now()
@@ -396,6 +399,19 @@ def process_dataset(dataset, published=True):
         update_bodies(bodies, published, dataset, dataset_uid, neuprint_bodyset)
 
 
+def get_public_body_ids():
+    save_server = ARG.SERVER
+    ARG.SERVER = 'https://neuprint.janelia.org'
+    LOGGER.info("Finding public body IDs")
+    CONFIG['neuprint'] = {'url': ARG.SERVER + '/api/'}
+    response = call_responder('neuprint', 'dbmeta/datasets')
+    for dataset in response:
+        Client(ARG.SERVER, dataset=dataset)
+        bodies, neuprint_bodyset = fetch_neuprint_bodies(dataset)
+        EXISTING_BODY[dataset] = neuprint_bodyset
+    ARG.SERVER = save_server
+
+
 def get_metadata():
     """ Update data in MongoDB for datasets known to one NeuPrint server
         Keyword arguments:
@@ -406,14 +422,9 @@ def get_metadata():
     if not ARG.SERVER:
         ARG.SERVER = "https://neuprint%s.janelia.org" % ('-pre' if ARG.NEUPRINT == 'pre' else '')
     if ARG.NEUPRINT == "pre":
-        LOGGER.info("Finding public body IDs")
-        CONFIG['neuprint'] = {'url': 'https://neuprint.janelia.org/api/'}
-        response = call_responder('neuprint', 'dbmeta/datasets')
-        for dataset in response:
-            print(dataset)
+        get_public_body_ids()
     CONFIG['neuprint'] = {'url': ARG.SERVER + '/api/'}
     response = call_responder('neuprint', 'dbmeta/datasets')
-    sys.exit(0)
     for dataset in response:
         if ARG.RELEASE and ARG.RELEASE != dataset:
             continue
