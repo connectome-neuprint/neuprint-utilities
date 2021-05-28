@@ -23,7 +23,8 @@ KEYS = dict()
 DBM = ''
 EXISTING_BODY = dict()
 # Mapping of NeuPrint column number to Mongo name
-COLUMN = ["name", "status", "neuronType", "neuronInstance"]
+COLUMN = ["name", "status", "neuronType", "neuronInstance", "voxelSize"]
+INT_COLUMN = ["voxelSize"]
 
 # pylint: disable=W0703
 
@@ -233,7 +234,7 @@ def fetch_neuprint_bodies(dataset):
     """
     query = """
     MATCH (n: Neuron)
-    RETURN n.bodyId as bodyId, n.status as status, n.type as type, n.instance as instance
+    RETURN n.bodyId as bodyId, n.status as status, n.type as type, n.instance as instance, n.size as size
     ORDER BY n.type, n.instance
     """
     results = fetch_custom(query, dataset=dataset, format='json')
@@ -253,11 +254,17 @@ def insert_body(payload, body, last_uid):
         Returns:
           Inserted UID
     """
-    if payload['dataSetIdentifier'] in EXISTING_BODY and str(body[0]) in EXISTING_BODY[payload['dataSetIdentifier']]:
-        COUNT['published'] += 1
-        return
+    # Uncomment this to check public data set for every body ID
+    #if payload['dataSetIdentifier'] in EXISTING_BODY and str(body[0]) in EXISTING_BODY[payload['dataSetIdentifier']]:
+    #    COUNT['published'] += 1
+    #    return
     for idx, name in enumerate(COLUMN):
-        payload[name] = None if body[idx] is None else str(body[idx])
+        if body[idx] is None:
+            payload[name] = None
+        elif name in INT_COLUMN:
+            payload[name] = body[idx]
+        else:
+            payload[name] = str(body[idx])
     payload["creationDate"] = datetime.now()
     payload["updatedDate"] = datetime.now()
     LOGGER.debug(payload)
@@ -372,7 +379,10 @@ def update_bodies(bodies, published, dataset, dataset_uid, neuprint_bodyset):
         payload = {}
         # status, type, instance
         for idx in range(1, len(COLUMN)):
-            if body[idx] != mrow[COLUMN[idx]]:
+            if COLUMN[idx] not in mrow:
+                #LOGGER.info("Added new column %s (%s) to %s", COLUMN[idx], body[idx], str(body[0]))
+                payload[COLUMN[idx]] = body[idx]
+            elif body[idx] != mrow[COLUMN[idx]]:
                 LOGGER.info("Change %s from %s to %s for %s", COLUMN[idx],
                             mrow[COLUMN[idx]], body[idx], str(body[0]))
                 payload[COLUMN[idx]] = body[idx]
@@ -407,8 +417,10 @@ def get_public_body_ids():
     response = call_responder('neuprint', 'dbmeta/datasets')
     for dataset in response:
         Client(ARG.SERVER, dataset=dataset)
-        bodies, neuprint_bodyset = fetch_neuprint_bodies(dataset)
-        EXISTING_BODY[dataset] = neuprint_bodyset
+        # For now, just sage the names of the data set
+        EXISTING_BODY[dataset] = 1
+        #bodies, neuprint_bodyset = fetch_neuprint_bodies(dataset)
+        #EXISTING_BODY[dataset] = neuprint_bodyset
     ARG.SERVER = save_server
 
 
