@@ -8,7 +8,7 @@ import socket
 import sys
 import time
 import colorlog
-from neuprint import Client, fetch_custom, fetch_meta
+from neuprint import Client, default_client, fetch_custom, fetch_meta, set_default_client
 from pymongo import MongoClient
 import requests
 from tqdm import tqdm
@@ -149,7 +149,9 @@ def setup_dataset(dataset, published):
           last_uid: last UID assigned
           action: what to do with bodies in this data set (ignore, insert, or update)
     """
+    LOGGER.info("Initializing Client for %s %s", ARG.SERVER, dataset)
     npc = Client(ARG.SERVER, dataset=dataset)
+    set_default_client(npc)
     result = fetch_meta(client=npc)
     if ':' in dataset:
         name, version = dataset.split(':')
@@ -237,7 +239,8 @@ def fetch_neuprint_bodies(dataset):
     RETURN n.bodyId as bodyId, n.status as status, n.type as type, n.instance as instance, n.size as size
     ORDER BY n.type, n.instance
     """
-    results = fetch_custom(query, dataset=dataset, format='json')
+    print(default_client())
+    results = fetch_custom(query, format='json')
     LOGGER.info("%d Body IDs found in NeuPrint %s", len(results['data']), dataset)
     neuprint_bodyset = set()
     for row in results['data']:
@@ -423,11 +426,11 @@ def get_public_body_ids():
     CONFIG['neuprint'] = {'url': ARG.SERVER + '/api/'}
     response = call_responder('neuprint', 'dbmeta/datasets')
     for dataset in response:
-        Client(ARG.SERVER, dataset=dataset)
         # For now, just sage the names of the data set
         EXISTING_BODY[dataset] = 1
-        #bodies, neuprint_bodyset = fetch_neuprint_bodies(dataset)
-        #EXISTING_BODY[dataset] = neuprint_bodyset
+        # Client(ARG.SERVER, dataset=dataset)
+        # bodies, neuprint_bodyset = fetch_neuprint_bodies(dataset)
+        # EXISTING_BODY[dataset] = neuprint_bodyset
     ARG.SERVER = save_server
 
 
