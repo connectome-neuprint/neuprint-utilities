@@ -368,6 +368,7 @@ def update_bodies(bodies, published, dataset, dataset_uid, neuprint_bodyset):
     if diff:
         LOGGER.warning("Bodies to remove from Mongo: %d", len(diff))
         for body in tqdm(diff):
+            LOGGER.debug("Delete %s %s", mbodies[body]['_id'], body)
             if ARG.WRITE:
                 DBM.emBody.delete_one({"_id": mbodies[body]['_id'],
                                        "name": body})
@@ -387,7 +388,7 @@ def update_bodies(bodies, published, dataset, dataset_uid, neuprint_bodyset):
                 LOGGER.info("Added new column %s (%s) to %s", COLUMN[idx], body[idx], str(body[0]))
                 payload[COLUMN[idx]] = body[idx]
             elif body[idx] != mrow[COLUMN[idx]]:
-                LOGGER.info("Change %s from %s to %s for %s", COLUMN[idx],
+                LOGGER.debug("Change %s from %s to %s for %s", COLUMN[idx],
                             mrow[COLUMN[idx]], body[idx], str(body[0]))
                 payload[COLUMN[idx]] = body[idx]
         if payload:
