@@ -169,6 +169,7 @@ def setup_dataset(dataset, published):
                    "name" : result['dataset'], "version": version,
                    "creationDate": to_datetime(result['lastDatabaseEdit']),
                    "updatedDate": to_datetime(result['lastDatabaseEdit']),
+                   "active": True,
                    "published": published
                   }
         if published:
@@ -190,20 +191,17 @@ def setup_dataset(dataset, published):
         LOGGER.info("%s already exists in Mongo (UID: %s)", dataset, check['_id'])
         last_uid = check['_id']
         neuprint_dt = to_datetime(result['lastDatabaseEdit'])
-        if neuprint_dt > check['updatedDate']:
+        if neuprint_dt > check['updatedDate'] or ARG.FORCE:
             LOGGER.warning("Update required for %s (last changed %s)",
                            dataset, result['lastDatabaseEdit'])
-            payload = {"updatedDate": neuprint_dt}
+            payload = {"updatedDate": neuprint_dt, "active": True}
             if ARG.WRITE:
                 coll.update_one({"_id": check['_id']},
                                 {"$set": payload})
             action = 'update'
         else:
-            if ARG.FORCE:
-                action = 'update'
-            else:
-                LOGGER.info("No update required for %s (last changed %s)",
-                            dataset, check['updatedDate'])
+            LOGGER.info("No update required for %s (last changed %s)",
+                        dataset, check['updatedDate'])
     return last_uid, action
 
 
