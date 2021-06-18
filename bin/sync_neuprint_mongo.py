@@ -2,7 +2,7 @@
 '''
 
 import argparse
-from datetime import datetime
+from datetime import datetime, timezone
 import os
 import socket
 import sys
@@ -23,7 +23,7 @@ KEYS = dict()
 DBM = ''
 EXISTING_BODY = dict()
 # Mapping of NeuPrint column number to Mongo name
-COLUMN = ["name", "status", "neuronType", "neuronInstance", "voxelSize"]
+COLUMN = ["name", "status", "statusLabel", "neuronType", "neuronInstance", "voxelSize"]
 INT_COLUMN = ["voxelSize"]
 
 # pylint: disable=W0703
@@ -137,6 +137,11 @@ def to_datetime(dt_string):
         Returns:
           datetime object
     """
+    if 'Z' in dt_string:
+        dt_string = dt_string.replace("Z", "+0000")
+        dt_aware = datetime.strptime(dt_string.replace('T', ' '), "%Y-%m-%d %H:%M:%S.%f%z")
+        dt_aware = dt_aware.replace(tzinfo=timezone.utc).astimezone(tz=None)
+        return dt_aware.replace(tzinfo=None)
     return datetime.strptime(dt_string.replace('T', ' '), "%Y-%m-%d %H:%M:%S")
 
 
@@ -234,7 +239,7 @@ def fetch_neuprint_bodies(dataset):
     """
     query = """
     MATCH (n: Neuron)
-    RETURN n.bodyId as bodyId, n.status as status, n.type as type, n.instance as instance, n.size as size
+    RETURN n.bodyId as bodyId,n.status as status,n.statusLabel as label,n.type as type,n.instance as instance,n.size as size
     ORDER BY n.type, n.instance
     """
     print(default_client())
@@ -380,14 +385,14 @@ def update_bodies(bodies, published, dataset, dataset_uid, neuprint_bodyset):
             continue
         mrow = mbodies[str(body[0])]
         payload = {}
-        # status, type, instance
+        # status, status label, type, instance
         for idx in range(1, len(COLUMN)):
             if COLUMN[idx] not in mrow:
                 LOGGER.info("Added new column %s (%s) to %s", COLUMN[idx], body[idx], str(body[0]))
                 payload[COLUMN[idx]] = body[idx]
             elif body[idx] != mrow[COLUMN[idx]]:
                 LOGGER.debug("Change %s from %s to %s for %s", COLUMN[idx],
-                            mrow[COLUMN[idx]], body[idx], str(body[0]))
+                             mrow[COLUMN[idx]], body[idx], str(body[0]))
                 payload[COLUMN[idx]] = body[idx]
         if payload:
             update_body(mrow["_id"], payload)
@@ -491,5 +496,6 @@ if __name__ == '__main__':
     LOGGER.addHandler(HANDLER)
 
     initialize_program()
+    LOCAL_TIMEZONE = datetime.now(timezone.utc).astimezone().tzinfo
     get_metadata()
     sys.exit(0)
