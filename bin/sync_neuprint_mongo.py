@@ -199,7 +199,7 @@ def setup_dataset(dataset, published):
         if neuprint_dt > check['updatedDate'] or ARG.FORCE:
             LOGGER.warning("Update required for %s (last changed %s)",
                            dataset, result['lastDatabaseEdit'])
-            payload = {"updatedDate": neuprint_dt, "active": True}
+            payload = {"updatedDate": datetime.now(), "active": True}
             if ARG.WRITE:
                 coll.update_one({"_id": check['_id']},
                                 {"$set": payload})
