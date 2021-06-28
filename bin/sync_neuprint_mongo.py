@@ -137,6 +137,7 @@ def to_datetime(dt_string):
         Returns:
           datetime object
     """
+    dt_string = dt_string.replace("Timestamp:", "")
     if 'Z' in dt_string:
         dt_string = dt_string.replace("Z", "+0000")
         dt_aware = datetime.strptime(dt_string.replace('T', ' '), "%Y-%m-%d %H:%M:%S.%f%z")
