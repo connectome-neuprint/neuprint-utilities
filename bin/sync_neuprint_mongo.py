@@ -70,13 +70,14 @@ def initialize_program():
     # Connect to Mongo
     rwp = 'write' if ARG.WRITE else 'read'
     try:
+        LOGGER.info("Connecting to Mongo on %s", ARG.MANIFOLD)
         if ARG.MANIFOLD == 'prod':
             client = MongoClient(data['config']['jacs-mongo'][ARG.MANIFOLD][rwp]['host'],
                                  replicaSet='replWorkstation')
         elif ARG.MANIFOLD == 'local':
-            client = MongoClient(data['config']['jacs-mongo'][ARG.MANIFOLD][rwp]['host'])
-        else:
             client = MongoClient()
+        else:
+            client = MongoClient(data['config']['jacs-mongo'][ARG.MANIFOLD][rwp]['host'])
         DBM = client.jacs
         if ARG.MANIFOLD == 'prod':
             DBM.authenticate(data['config']['jacs-mongo'][ARG.MANIFOLD][rwp]['user'],
