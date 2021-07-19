@@ -68,9 +68,9 @@ def initialize_program():
     CONFIG = data['config']
     data = call_responder('config', 'config/db_config')
     # Connect to Mongo
+    LOGGER.info("Connecting to Mongo on %s", ARG.MANIFOLD)
     rwp = 'write' if ARG.WRITE else 'read'
     try:
-        LOGGER.info("Connecting to Mongo on %s", ARG.MANIFOLD)
         if ARG.MANIFOLD == 'prod':
             client = MongoClient(data['config']['jacs-mongo'][ARG.MANIFOLD][rwp]['host'],
                                  replicaSet='replWorkstation')
