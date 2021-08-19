@@ -9,4 +9,18 @@
 ## Summary
 Utility programs for NeuPrint
 
+### Create docker container for sync-neuprint
+```
+ docker build -t sync_neuprint:1.0 .
+```
+
+### Running sync-neuprint with docker
+
+Create a file named .env that contains NEUPRINT_APPLICATION_CREDENTIALS environment variable
+
+```
+docker run -it --env-file .env sync_neuprint \
+python /app/scripts/sync_neuprint_mongo.py --v --manifold dev --neuprint pre --debug
+```
+
 For more information, see the [Wiki](https://github.com/connectome-neuprint/neuprint-utilities/wiki)

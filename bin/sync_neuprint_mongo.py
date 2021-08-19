@@ -15,7 +15,7 @@ from tqdm import tqdm
 
 
 # Configuration
-CONFIG = {'config': {'url': 'http://config.int.janelia.org/'}}
+CONFIG = {'config': {'url': os.environ.get('CONFIG_SERVER_URL', 'http://config.int.janelia.org/')}}
 COUNT = {'mongo': 0, 'neuprint': 0, 'delete': 0, 'insert': 0, 'update': 0, 'published': 0}
 JWT = 'NEUPRINT_APPLICATION_CREDENTIALS'
 KEYS = dict()
