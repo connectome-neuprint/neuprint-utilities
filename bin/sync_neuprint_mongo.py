@@ -412,10 +412,23 @@ def process_dataset(dataset, published=True):
           None
     """
     dataset_uid, action = setup_dataset(dataset, published)
-    if action == 'ignore':
+    if action == 'ignore' and not ARG.FORCE:
         return
     bodies, neuprint_bodyset = fetch_neuprint_bodies(dataset)
     COUNT['neuprint'] += len(bodies)
+    # Show a list of statuses
+    if ARG.VERBOSE:
+        status = dict()
+        for body in bodies:
+            if not (body[3] and body[4]):
+                continue
+            try:
+                pos = body[4].index(body[3])
+                if pos:
+                    status[body[2]] = 1
+            except Exception as err:
+                status[body[2]] = 1
+        print("Statuses: %s" % ", ".join(list(status.keys())))
     if action == 'insert':
         insert_bodies(bodies, published, dataset, dataset_uid)
     else:
