@@ -19,6 +19,7 @@ CONFIG = {'config': {'url': os.environ.get('CONFIG_SERVER_URL', 'http://config.i
 COUNT = {'mongo': 0, 'neuprint': 0, 'delete': 0, 'insert': 0, 'update': 0, 'published': 0}
 JWT = 'NEUPRINT_APPLICATION_CREDENTIALS'
 KEYS = dict()
+GENDER = ""
 # Database
 DBM = ''
 EXISTING_BODY = dict()
@@ -60,12 +61,14 @@ def call_responder(server, endpoint):
 def initialize_program():
     """ Initialize program
     """
-    global CONFIG, DBM  # pylint: disable=W0603
+    global CONFIG, DBM, GENDER  # pylint: disable=W0603
     if JWT not in os.environ:
         LOGGER.error("Missing JSON Web Token - set in %s environment variable", JWT)
         sys.exit(-1)
     data = call_responder('config', 'config/rest_services')
     CONFIG = data['config']
+    data = call_responder('config', 'config/em_gender')
+    GENDER = data['config']
     data = call_responder('config', 'config/db_config')
     # Connect to Mongo
     LOGGER.info("Connecting to Mongo on %s", ARG.MANIFOLD)
@@ -173,10 +176,14 @@ def setup_dataset(dataset, published):
     check = coll.find_one({"name": name, "version": version, "published": published})
     action = 'ignore'
     if not check:
+        if result['dataset'] not in GENDER:
+            LOGGER.error("%s does not have a gender defined", result['dataset'])
+            sys.exit(-1)
         payload = {"class" : "org.janelia.model.domain.flyem.EMDataSet",
                    "ownerKey": "group:flyem", "readers": ["group:flyem"],
                    "writers": ["group:flyem"],
                    "name" : result['dataset'], "version": version,
+                   "gender": GENDER[result['dataset']],
                    "creationDate": to_datetime(result['lastDatabaseEdit']),
                    "updatedDate": to_datetime(result['lastDatabaseEdit']),
                    "active": True,
