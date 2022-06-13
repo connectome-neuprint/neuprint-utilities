@@ -178,6 +178,7 @@ def setup_dataset(dataset, published):
     if not check:
         if result['dataset'] not in GENDER:
             LOGGER.error("%s does not have a gender defined", result['dataset'])
+            return None, "ignore"
             sys.exit(-1)
         payload = {"class" : "org.janelia.model.domain.flyem.EMDataSet",
                    "ownerKey": "group:flyem", "readers": ["group:flyem"],
