@@ -18,11 +18,11 @@ from tqdm import tqdm
 CONFIG = {'config': {'url': os.environ.get('CONFIG_SERVER_URL', 'http://config.int.janelia.org/')}}
 COUNT = {'mongo': 0, 'neuprint': 0, 'delete': 0, 'insert': 0, 'update': 0, 'published': 0}
 JWT = 'NEUPRINT_APPLICATION_CREDENTIALS'
-KEYS = dict()
-GENDER = ""
+KEYS = {}
+EMATTR = {}
 # Database
 DBM = ''
-EXISTING_BODY = dict()
+EXISTING_BODY = {}
 # Mapping of NeuPrint column number to Mongo name
 COLUMN = ["name", "status", "statusLabel", "neuronType", "neuronInstance", "voxelSize"]
 INT_COLUMN = ["voxelSize"]
@@ -61,14 +61,14 @@ def call_responder(server, endpoint):
 def initialize_program():
     """ Initialize program
     """
-    global CONFIG, DBM, GENDER  # pylint: disable=W0603
+    global CONFIG, DBM, EMATTR  # pylint: disable=W0603
     if JWT not in os.environ:
         LOGGER.error("Missing JSON Web Token - set in %s environment variable", JWT)
         sys.exit(-1)
     data = call_responder('config', 'config/rest_services')
     CONFIG = data['config']
-    data = call_responder('config', 'config/em_gender')
-    GENDER = data['config']
+    data = call_responder('config', 'config/em_datasets')
+    EMATTR = data['config']
     data = call_responder('config', 'config/db_config')
     # Connect to Mongo
     LOGGER.info("Connecting to Mongo on %s", ARG.MANIFOLD)
@@ -172,19 +172,21 @@ def setup_dataset(dataset, published):
     else:
         name = dataset
         version = ''
+    LOGGER.info(f"Found NeuPrint dataset {name}:{version} ({result['uuid']})")
     coll = DBM.emDataSet
     check = coll.find_one({"name": name, "version": version, "published": published})
     action = 'ignore'
     if not check:
-        if result['dataset'] not in GENDER:
-            LOGGER.error("%s does not have a gender defined", result['dataset'])
+        if result['dataset'] not in EMATTR:
+            LOGGER.error("%s does not have attributes defined", result['dataset'])
             return None, "ignore"
-            sys.exit(-1)
         payload = {"class" : "org.janelia.model.domain.flyem.EMDataSet",
                    "ownerKey": "group:flyem", "readers": ["group:flyem"],
                    "writers": ["group:flyem"],
                    "name" : result['dataset'], "version": version,
-                   "gender": GENDER[result['dataset']],
+                   "uuid": result['uuid'],
+                   "gender": EMATTR[result['dataset']]['gender'],
+                   "anatomicalArea": EMATTR[result['dataset']]['anatomicalArea'],
                    "creationDate": to_datetime(result['lastDatabaseEdit']),
                    "updatedDate": to_datetime(result['lastDatabaseEdit']),
                    "active": True,
@@ -212,7 +214,8 @@ def setup_dataset(dataset, published):
         if neuprint_dt > check['updatedDate'] or ARG.FORCE:
             LOGGER.warning("Update required for %s (last changed %s)",
                            dataset, result['lastDatabaseEdit'])
-            payload = {"updatedDate": datetime.now(), "active": True}
+            payload = {"updatedDate": datetime.now(), "active": True,
+                       "uuid": result["uuid"]}
             if ARG.WRITE:
                 coll.update_one({"_id": check['_id']},
                                 {"$set": payload})
