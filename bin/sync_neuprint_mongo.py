@@ -1,35 +1,47 @@
-''' Get NeuPrint metadata
+''' Get NeuPrint metadata and update 
 '''
 
 import argparse
 from datetime import datetime, timezone
+from operator import attrgetter
 import os
 import socket
 import sys
 import time
-import colorlog
-from neuprint import Client, default_client, fetch_custom, fetch_meta, set_default_client
-from pymongo import MongoClient
+import MySQLdb
 import requests
 from tqdm import tqdm
+import jrc_common.jrc_common as JRC
+from neuprint import Client, default_client, fetch_custom, fetch_meta, set_default_client
 
 
 # Configuration
-CONFIG = {'config': {'url': os.environ.get('CONFIG_SERVER_URL', 'http://config.int.janelia.org/')}}
+CONFIG = {'config': {}}
 COUNT = {'mongo': 0, 'neuprint': 0, 'delete': 0, 'insert': 0, 'update': 0, 'published': 0}
 JWT = 'NEUPRINT_APPLICATION_CREDENTIALS'
 KEYS = {}
-EMATTR = {}
 # Database
-DBM = ''
+DBM = {}
 EXISTING_BODY = {}
 # Mapping of NeuPrint column number to Mongo name
 COLUMN = ["name", "status", "statusLabel", "neuronType", "neuronInstance", "voxelSize"]
 INT_COLUMN = ["voxelSize"]
 
-# pylint: disable=W0703
+# pylint: disable=W0703,C0209,W1203
 
 # -----------------------------------------------------------------------------
+
+def terminate_program(msg=None):
+    """ Log an optional error to output, close files, and exit
+        Keyword arguments:
+          err: error message
+        Returns:
+           None
+    """
+    if msg:
+        LOGGER.critical(msg)
+    sys.exit(-1 if msg else 0)
+
 
 def call_responder(server, endpoint):
     """ Call a responder and return JSON
@@ -46,9 +58,9 @@ def call_responder(server, endpoint):
             headers = {"Content-Type": "application/json",
                        "Authorization": "Bearer " + os.environ[JWT]}
         if authenticate:
-            req = requests.get(url, headers=headers)
+            req = requests.get(url, headers=headers, timeout=10)
         else:
-            req = requests.get(url)
+            req = requests.get(url, timeout=10)
     except requests.exceptions.RequestException as err:
         LOGGER.critical(err)
         sys.exit(-1)
@@ -61,33 +73,21 @@ def call_responder(server, endpoint):
 def initialize_program():
     """ Initialize program
     """
-    global CONFIG, DBM, EMATTR  # pylint: disable=W0603
     if JWT not in os.environ:
         LOGGER.error("Missing JSON Web Token - set in %s environment variable", JWT)
         sys.exit(-1)
-    data = call_responder('config', 'config/rest_services')
-    CONFIG = data['config']
-    data = call_responder('config', 'config/em_datasets')
-    EMATTR = data['config']
-    data = call_responder('config', 'config/db_config')
     # Connect to Mongo
-    LOGGER.info("Connecting to Mongo on %s", ARG.MANIFOLD)
-    rwp = 'write' if ARG.WRITE else 'read'
     try:
-        if ARG.MANIFOLD == 'prod':
-            client = MongoClient(data['config']['jacs-mongo'][ARG.MANIFOLD][rwp]['host'],
-                                 replicaSet='replWorkstation')
-        elif ARG.MANIFOLD == 'local':
-            client = MongoClient()
-        else:
-            client = MongoClient(data['config']['jacs-mongo'][ARG.MANIFOLD][rwp]['host'])
-        DBM = client.jacs
-        if ARG.MANIFOLD == 'prod':
-            DBM.authenticate(data['config']['jacs-mongo'][ARG.MANIFOLD][rwp]['user'],
-                             data['config']['jacs-mongo'][ARG.MANIFOLD][rwp]['password'])
-    except Exception as err:
-        LOGGER.error('Could not connect to Mongo: %s', err)
-        sys.exit(-1)
+        data = JRC.get_config("databases")
+    except Exception as err: # pylint: disable=broad-exception-caught)
+        terminate_program(err)
+    rwp = 'write' if ARG.WRITE else 'read'
+    dbo = attrgetter(f"jacs.{ARG.MANIFOLD}.{rwp}")(data)
+    LOGGER.info("Connecting to %s %s on %s as %s", dbo.name, ARG.MANIFOLD, dbo.host, dbo.user)
+    try:
+        DBM['jacs'] = JRC.connect_database(dbo)
+    except MySQLdb.Error as err:
+        terminate_program(JRC.sql_error(err))
 
 
 def generate_uid(deployment_context=2, last_uid=None):
@@ -111,11 +111,11 @@ def generate_uid(deployment_context=2, last_uid=None):
     next_uid = None
     while current_index <= max_tries and not next_uid:
         time_component = int(time.time()*1000) - current_time_offset
-        LOGGER.debug("time_component: {0:b}".format(time_component))
-        time_component = (time_component << 22)
-        LOGGER.debug("current_index: {0:b}".format(current_index))
-        LOGGER.debug("deployment_context: {0:b}".format(deployment_context))
-        LOGGER.debug("ip_component: {0:b}".format(ip_component))
+        LOGGER.debug(f"time_component: {time_component:b}")
+        time_component = time_component << 22
+        LOGGER.debug(f"current_index: {current_index:b}")
+        LOGGER.debug(f"deployment_context: {deployment_context:b}")
+        LOGGER.debug(f"ip_component: {ip_component:b}")
         next_uid = time_component + (current_index << 12) + (deployment_context << 8) + ip_component
         if last_uid and last_uid == next_uid:
             LOGGER.debug("Soft collision %d (%d)", last_uid, current_index)
@@ -123,7 +123,7 @@ def generate_uid(deployment_context=2, last_uid=None):
             current_index += 1
         if not next_uid and (current_index > max_tries):
             LOGGER.debug("Hard collision %d (%d)", last_uid, current_index)
-            time.sleep(0.5)
+            time.sleep(0.75)
             current_index = 0
     if not next_uid:
         LOGGER.critical("Could not generate UID")
@@ -173,11 +173,12 @@ def setup_dataset(dataset, published):
         name = dataset
         version = ''
     LOGGER.info(f"Found NeuPrint dataset {name}:{version} ({result['uuid']})")
-    coll = DBM.emDataSet
+    coll = DBM['jacs'].emDataSet
     check = coll.find_one({"name": name, "version": version, "published": published})
     action = 'ignore'
+    emattr = JRC.get_config("em_datasets")
     if not check:
-        if result['dataset'] not in EMATTR:
+        if not hasattr(emattr, result['dataset']):
             LOGGER.error("%s does not have attributes defined", result['dataset'])
             return None, "ignore"
         payload = {"class" : "org.janelia.model.domain.flyem.EMDataSet",
@@ -185,8 +186,8 @@ def setup_dataset(dataset, published):
                    "writers": ["group:flyem"],
                    "name" : result['dataset'], "version": version,
                    "uuid": result['uuid'],
-                   "gender": EMATTR[result['dataset']]['gender'],
-                   "anatomicalArea": EMATTR[result['dataset']]['anatomicalArea'],
+                   "gender": attrgetter(f"{result['dataset']}.gender")(emattr),
+                   "anatomicalArea": attrgetter(f"{result['dataset']}.anatomicalArea")(emattr),
                    "creationDate": to_datetime(result['lastDatabaseEdit']),
                    "updatedDate": to_datetime(result['lastDatabaseEdit']),
                    "active": True,
@@ -235,9 +236,9 @@ def fetch_mongo_bodies(dataset, dataset_uid):
           rowdict: dictionary of rows from Mongo
           mongo_bodyset: set of body IDs
     """
-    rows = DBM.emBody.find({"dataSetRef": 'EMDataSet#' + str(dataset_uid)})
+    rows = DBM['jacs'].emBody.find({"dataSetRef": 'EMDataSet#' + str(dataset_uid)})
     mongo_bodyset = set()
-    rowdict = dict()
+    rowdict = {}
     for row in rows:
         mongo_bodyset.add(row['name'])
         rowdict[row['name']] = row
@@ -294,7 +295,7 @@ def insert_body(payload, body, last_uid):
     last_uid = generate_uid(last_uid=last_uid)
     payload['_id'] = last_uid
     if ARG.WRITE:
-        post_id = DBM.emBody.insert_one(payload).inserted_id
+        post_id = DBM['jacs'].emBody.insert_one(payload).inserted_id
     else:
         time.sleep(.0005) # If we're not writing, the UID assignment is too fast
         post_id = last_uid
@@ -315,8 +316,8 @@ def update_body(uid, payload):
     """
     payload["updatedDate"] = datetime.now()
     if ARG.WRITE:
-        result = DBM.emBody.update_one({"_id": uid},
-                                       {"$set": payload})
+        result = DBM['jacs'].emBody.update_one({"_id": uid},
+                                               {"$set": payload})
         COUNT['update'] += result.modified_count
     else:
         COUNT['update'] += 1
@@ -331,7 +332,7 @@ def get_body_payload_initial(dataset, dataset_uid, published):
         Returns:
           body_payload: initial body payload
     """
-    data_set_ref = "EMDataSet#%d" % (dataset_uid)
+    data_set_ref = f"EMDataSet#{dataset_uid}"
     body_payload = {"class": "org.janelia.model.domain.flyem.EMBody",
                     "dataSetIdentifier": dataset,
                     "ownerKey": "group:flyem", "readers": ["group:flyem"],
@@ -389,8 +390,8 @@ def update_bodies(bodies, published, dataset, dataset_uid, neuprint_bodyset):
         for body in tqdm(diff):
             LOGGER.debug("Delete %s %s", mbodies[body]['_id'], body)
             if ARG.WRITE:
-                DBM.emBody.delete_one({"_id": mbodies[body]['_id'],
-                                       "name": body})
+                DBM['jacs'].emBody.delete_one({"_id": mbodies[body]['_id'],
+                                               "name": body})
             COUNT['delete'] += 1
     # Bodies to check for update
     intersection = neuprint_bodyset.intersection(mongo_bodyset)
@@ -429,7 +430,7 @@ def process_dataset(dataset, published=True):
     COUNT['neuprint'] += len(bodies)
     # Show a list of statuses
     if ARG.VERBOSE:
-        status = dict()
+        status = {}
         for body in bodies:
             if not (body[3] and body[4]):
                 continue
@@ -437,9 +438,9 @@ def process_dataset(dataset, published=True):
                 pos = body[4].index(body[3])
                 if pos:
                     status[body[2]] = 1
-            except Exception as err:
+            except Exception:
                 status[body[2]] = 1
-        print("Statuses: %s" % ", ".join(list(status.keys())))
+        print(f"Statuses: {', '.join(list(status.keys()))}")
     if action == 'insert':
         insert_bodies(bodies, published, dataset, dataset_uid)
     else:
@@ -475,7 +476,7 @@ def get_metadata():
           None
     """
     if not ARG.SERVER:
-        ARG.SERVER = "https://neuprint%s.janelia.org" % ('-pre' if ARG.NEUPRINT == 'pre' else '')
+        ARG.SERVER = f"https://neuprint{'-pre' if ARG.NEUPRINT == 'pre' else ''}.janelia.org"
     if ARG.NEUPRINT == "pre":
         get_public_body_ids()
     CONFIG['neuprint'] = {'url': ARG.SERVER + '/api/'}
@@ -502,7 +503,7 @@ if __name__ == '__main__':
     PARSER.add_argument('--neuprint', dest='NEUPRINT', action='store',
                         choices=['prod', 'pre'], default='prod', help='NeuPrint instance')
     PARSER.add_argument('--manifold', dest='MANIFOLD', action='store',
-                        choices=['dev', 'prod', 'local'], default='local', help='Manifold')
+                        choices=['dev', 'prod', 'local'], default='dev', help='Manifold')
     PARSER.add_argument('--force', dest='FORCE', action='store_true',
                         default=False, help='Force update')
     PARSER.add_argument('--write', dest='WRITE', action='store_true',
@@ -512,19 +513,7 @@ if __name__ == '__main__':
     PARSER.add_argument('--debug', dest='DEBUG', action='store_true',
                         default=False, help='Flag, Very chatty')
     ARG = PARSER.parse_args()
-
-    LOGGER = colorlog.getLogger()
-    ATTR = colorlog.colorlog.logging if "colorlog" in dir(colorlog) else colorlog
-    if ARG.DEBUG:
-        LOGGER.setLevel(ATTR.DEBUG)
-    elif ARG.VERBOSE:
-        LOGGER.setLevel(ATTR.INFO)
-    else:
-        LOGGER.setLevel(ATTR.WARNING)
-    HANDLER = colorlog.StreamHandler()
-    HANDLER.setFormatter(colorlog.ColoredFormatter())
-    LOGGER.addHandler(HANDLER)
-
+    LOGGER = JRC.setup_logging(ARG)
     initialize_program()
     LOCAL_TIMEZONE = datetime.now(timezone.utc).astimezone().tzinfo
     get_metadata()
