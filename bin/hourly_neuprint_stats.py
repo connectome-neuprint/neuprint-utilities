@@ -31,9 +31,11 @@ def call_responder(server, endpoint, payload=''):
         else:
             req = requests.get(url)
     except requests.exceptions.RequestException as err:
+        LOGGER.critical(f"{url} {payload}")
         LOGGER.critical(err)
         sys.exit(-1)
     if req.status_code != 200:
+        LOGGER.critical(f"{url} {payload}")
         LOGGER.critical('Status: %s', str(req.status_code))
         sys.exit(-1)
     else:
@@ -128,7 +130,7 @@ def process_data(dataset):
 if __name__ == '__main__':
     PARSER = argparse.ArgumentParser(description="Write dataset daily stats to config system")
     PARSER.add_argument('--dataset', dest='DATASET', action='store',
-                        default='hemibrain', help='Dataset [hemibrain]')
+            default='hemibrain:v1.2.1', help='Dataset [hemibrain:v1.2.1]')
     PARSER.add_argument('--topic', dest='TOPIC', action='store',
                         default='neuprint_hourly_metrics', help='Kafka topic to publish to [nptest]')
     PARSER.add_argument('--write', dest='WRITE', action='store_true',
@@ -140,12 +142,13 @@ if __name__ == '__main__':
     ARG = PARSER.parse_args()
 
     LOGGER = colorlog.getLogger()
+    ATTR = colorlog.colorlog.logging if "colorlog" in dir(colorlog) else colorlog
     if ARG.DEBUG:
-        LOGGER.setLevel(colorlog.colorlog.logging.DEBUG)
+        LOGGER.setLevel(ATTR.DEBUG)
     elif ARG.VERBOSE:
-        LOGGER.setLevel(colorlog.colorlog.logging.INFO)
+        LOGGER.setLevel(ATTR.INFO)
     else:
-        LOGGER.setLevel(colorlog.colorlog.logging.WARNING)
+        LOGGER.setLevel(ATTR.WARNING)
     HANDLER = colorlog.StreamHandler()
     HANDLER.setFormatter(colorlog.ColoredFormatter())
     LOGGER.addHandler(HANDLER)
