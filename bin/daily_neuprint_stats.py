@@ -21,15 +21,18 @@ def call_responder(server, endpoint, payload=''):
     try:
         if payload:
             headers = {"Content-type": "application/json", "Authorization": "Bearer " + CONFIG[server]['bearer']}
-            logger.debug(payload)
+            LOGGER.debug(payload)
             req = requests.post(url, headers=headers, json=payload)
         else:
             req = requests.get(url)
     except requests.exceptions.RequestException as err:
-        logger.critical(err)
+        LOGGER.critical(err)
         sys.exit(-1)
     if req.status_code != 200:
-        logger.error('Status: %s', str(req.status_code))
+        msg = f"{url} returned a {req.status_code}"
+        if payload:
+            msg += f"\n{payload}"
+        LOGGER.error(msg)
         sys.exit(-1)
     else:
         return req.json()
@@ -48,18 +51,18 @@ def fetch_top_level(payload, datestruct, datasetn, suffix):
     payload = {"cypher": "MATCH (n :" + datasetn + "{status:\"0.5assign\"})" + suffix}
     response = call_responder('neuprint', 'custom/custom', payload)
     datestruct['0.5assign'] = response['data'][0][0]
-    logger.info('0.5assign: ' + str(datestruct['0.5assign']))
+    LOGGER.info('0.5assign: ' + str(datestruct['0.5assign']))
     # Anchors
     payload['cypher'] = "MATCH (n :" + datasetn + "{status:\"Anchor\"})" + suffix
     response = call_responder('neuprint', 'custom/custom', payload)
     datestruct['anchor'] = response['data'][0][0]
-    logger.info('anchor: ' + str(datestruct['anchor']))
+    LOGGER.info('anchor: ' + str(datestruct['anchor']))
     # Traced neurons
     #payload['cypher'] = "MATCH (n:`" + datasetn + "`) WHERE (n.status=\"Roughly traced\" OR n.status=\"Prelim Roughly traced\" OR n.status=\"Traced\")" + suffix
     payload['cypher'] = "MATCH (n :" + datasetn + ") WHERE (n.status=\"Roughly traced\" OR n.status=\"Prelim Roughly traced\" OR n.status=\"Traced\")" + suffix
     response = call_responder('neuprint', 'custom/custom', payload)
     datestruct['traced'] = response['data'][0][0]
-    logger.info('traced: ' + str(datestruct['traced']))
+    LOGGER.info('traced: ' + str(datestruct['traced']))
 
 
 def process_data(dataset):
@@ -80,7 +83,7 @@ def process_data(dataset):
     roidict = dict()
     count = 1
     for roi in rois:
-        logger.info('Fetching data for ROI ' + roi + ' (' + str(count) + '/' + str(len(rois)) + ')')
+        LOGGER.info('Fetching data for ROI ' + roi + ' (' + str(count) + '/' + str(len(rois)) + ')')
         # 0.5 Assign
         payload['cypher'] = "MATCH (n:`" + datasetn + "`{`" + roi + "`:true}) WHERE n.status=\"0.5assign\"" + suffix
         response = call_responder('neuprint', 'custom/custom', payload)
@@ -102,11 +105,11 @@ def process_data(dataset):
             roidict[roi].update({'presynaptic_total': totaldict[roi]['pre'], 'postsynaptic_total': totaldict[roi]['post']})
         count += 1
     datestruct['rois'] = roidict
-    logger.info('Found data for ' + str(len(roidict)) + ' ROIs')
-    logger.debug(datestruct)
+    LOGGER.info('Found data for ' + str(len(roidict)) + ' ROIs')
+    LOGGER.debug(datestruct)
     if ARG.WRITE:
         today = datetime.datetime.today().strftime('%Y-%m-%d')
-        logger.warning("Writing " + dataset + " data to config system for " +
+        LOGGER.warning("Writing " + dataset + " data to config system for " +
                        today)
         datestruct['update_date'] = str(datetime.datetime.now())
         try:
@@ -114,7 +117,7 @@ def process_data(dataset):
                           dataset + '/' + today,
                           {"config": json.dumps(datestruct)})
         except requests.exceptions.RequestException as err:
-            logger.critical(err)
+            LOGGER.critical(err)
             sys.exit(-1)
 
 
@@ -130,15 +133,16 @@ if __name__ == '__main__':
                         default=False, help='Flag, Very chatty')
     ARG = PARSER.parse_args()
 
-    logger = colorlog.getLogger()
+    LOGGER = colorlog.getLogger()
+    ATTR = colorlog.colorlog.logging if "colorlog" in dir(colorlog) else colorlog
     if ARG.DEBUG:
-        logger.setLevel(colorlog.colorlog.logging.DEBUG)
+        LOGGER.setLevel(ATTR.DEBUG)
     elif ARG.VERBOSE:
-        logger.setLevel(colorlog.colorlog.logging.INFO)
+        LOGGER.setLevel(ATTR.INFO)
     else:
-        logger.setLevel(colorlog.colorlog.logging.WARNING)
+        LOGGER.setLevel(ATTR.WARNING)
     HANDLER = colorlog.StreamHandler()
     HANDLER.setFormatter(colorlog.ColoredFormatter())
-    logger.addHandler(HANDLER)
+    LOGGER.addHandler(HANDLER)
     initialize_program()
     process_data(ARG.DATASET)
