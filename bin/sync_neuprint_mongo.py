@@ -148,7 +148,6 @@ def to_datetime(dt_string):
     if " /" in dt_string:
         dt_string = dt_string.split(" /")[0]
     dt_string = dt_string.split(".")[0]
-    LOGGER.error(dt_string)
     try:
         if 'Z' in dt_string:
             dt_string = dt_string.replace("Z", "+0000")
