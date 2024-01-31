@@ -145,11 +145,18 @@ def to_datetime(dt_string):
           datetime object
     """
     dt_string = dt_string.replace("Timestamp:", "")
-    if 'Z' in dt_string:
-        dt_string = dt_string.replace("Z", "+0000")
-        dt_aware = datetime.strptime(dt_string.replace('T', ' '), "%Y-%m-%d %H:%M:%S.%f%z")
-        dt_aware = dt_aware.replace(tzinfo=timezone.utc).astimezone(tz=None)
-        return dt_aware.replace(tzinfo=None)
+    if " /" in dt_string:
+        dt_string = dt_string.split(" /")[0]
+    dt_string = dt_string.split(".")[0]
+    LOGGER.error(dt_string)
+    try:
+        if 'Z' in dt_string:
+            dt_string = dt_string.replace("Z", "+0000")
+            dt_aware = datetime.strptime(dt_string.replace('T', ' '), "%Y-%m-%d %H:%M:%S.%f%z")
+            dt_aware = dt_aware.replace(tzinfo=timezone.utc).astimezone(tz=None)
+            return dt_aware.replace(tzinfo=None)
+    except Exception as err:
+        terminate_program(f"Could not parse datetime string {dt_string}")
     return datetime.strptime(dt_string.replace('T', ' '), "%Y-%m-%d %H:%M:%S")
 
 
@@ -172,7 +179,8 @@ def setup_dataset(dataset, published):
     else:
         name = dataset
         version = ''
-    LOGGER.info(f"Found NeuPrint dataset {name}:{version} ({result['uuid']})")
+    LOGGER.info(f"Found NeuPrint dataset {name}:{version} ({result['uuid']}) " \
+                + f"{result['lastDatabaseEdit']}")
     coll = DBM['jacs'].emDataSet
     check = coll.find_one({"name": name, "version": version, "published": published})
     action = 'ignore'
