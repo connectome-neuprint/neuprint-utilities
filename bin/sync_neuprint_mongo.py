@@ -17,7 +17,8 @@ from neuprint import Client, default_client, fetch_custom, fetch_meta, set_defau
 
 # Configuration
 CONFIG = {'config': {}}
-COUNT = {'mongo': 0, 'neuprint': 0, 'delete': 0, 'insert': 0, 'update': 0, 'published': 0}
+COUNT = {'mongo': 0, 'neuprint': 0, 'delete': 0, 'insert': 0, 'update': 0,
+         'added': 0, 'published': 0}
 JWT = 'NEUPRINT_APPLICATION_CREDENTIALS'
 KEYS = {}
 # Database
@@ -32,13 +33,15 @@ INT_COLUMN = ["voxelSize"]
 # -----------------------------------------------------------------------------
 
 def terminate_program(msg=None):
-    """ Log an optional error to output, close files, and exit
+    ''' Terminate the program gracefully
         Keyword arguments:
-          err: error message
+          msg: error message or object
         Returns:
-           None
-    """
+          None
+    '''
     if msg:
+        if not isinstance(msg, str):
+            msg = f"An exception of type {type(msg).__name__} occurred. Arguments:\n{msg.args}"
         LOGGER.critical(msg)
     sys.exit(-1 if msg else 0)
 
@@ -154,7 +157,7 @@ def to_datetime(dt_string):
             dt_aware = datetime.strptime(dt_string.replace('T', ' '), "%Y-%m-%d %H:%M:%S.%f%z")
             dt_aware = dt_aware.replace(tzinfo=timezone.utc).astimezone(tz=None)
             return dt_aware.replace(tzinfo=None)
-    except Exception as err:
+    except Exception as _:
         terminate_program(f"Could not parse datetime string {dt_string}")
     return datetime.strptime(dt_string.replace('T', ' '), "%Y-%m-%d %H:%M:%S")
 
@@ -168,9 +171,12 @@ def setup_dataset(dataset, published):
           last_uid: last UID assigned
           action: what to do with bodies in this data set (ignore, insert, or update)
     """
-    LOGGER.info("Initializing Client for %s %s", ARG.SERVER, dataset)
+    LOGGER.debug(f"Initializing Client for {ARG.SERVER} {dataset}")
     npc = Client(ARG.SERVER, dataset=dataset)
-    set_default_client(npc)
+    try:
+        set_default_client(npc)
+    except Exception as err:
+        terminate_program(err)
     result = fetch_meta(client=npc)
     if ':' in dataset:
         name, version = dataset.split(':')
@@ -186,8 +192,8 @@ def setup_dataset(dataset, published):
     emattr = JRC.get_config("em_datasets")
     if not check:
         if not hasattr(emattr, result['dataset']):
-            LOGGER.error("%s does not have attributes defined", result['dataset'])
-            return None, "ignore"
+            LOGGER.error(f"{result['dataset']} does not have attributes defined")
+            return None, "ignore", npc
         payload = {"class" : "org.janelia.model.domain.flyem.EMDataSet",
                    "ownerKey": "group:flyem", "readers": ["group:flyem"],
                    "writers": ["group:flyem"],
@@ -212,11 +218,11 @@ def setup_dataset(dataset, published):
         if post_id != last_uid:
             LOGGER.critical("Could not insert to Mongo with requested _id")
             sys.exit(-1)
-        LOGGER.info("Inserted data set %s (UID: %s, datetime: %s)", dataset, post_id,
-                    result['lastDatabaseEdit'])
+        LOGGER.info(f"Inserted data set {dataset} (UID: {post_id}, datetime: " \
+                    + f"{result['lastDatabaseEdit']})")
         action = 'insert'
     else:
-        LOGGER.info("%s already exists in Mongo (UID: %s)", dataset, check['_id'])
+        LOGGER.debug(f"{dataset} already exists in Mongo (UID: {check['_id']})")
         last_uid = check['_id']
         neuprint_dt = to_datetime(result['lastDatabaseEdit'])
         if neuprint_dt > check['updatedDate'] or ARG.FORCE:
@@ -228,10 +234,10 @@ def setup_dataset(dataset, published):
                 coll.update_one({"_id": check['_id']},
                                 {"$set": payload})
             action = 'update'
-        else:
-            LOGGER.info("No update required for %s (last changed %s)",
-                        dataset, check['updatedDate'])
-    return last_uid, action
+        elif ARG.VERBOSE:
+            LOGGER.warning(f"No update required for {dataset} " \
+                           + f"(last changed {check['updatedDate']})")
+    return last_uid, action, npc
 
 
 def fetch_mongo_bodies(dataset, dataset_uid):
@@ -249,11 +255,11 @@ def fetch_mongo_bodies(dataset, dataset_uid):
     for row in rows:
         mongo_bodyset.add(row['name'])
         rowdict[row['name']] = row
-    LOGGER.info("%d Body IDs found in MongoDB %s", len(mongo_bodyset), dataset)
+    LOGGER.info(f"{len(mongo_bodyset):,} Body IDs found in MongoDB {dataset}")
     return rowdict, mongo_bodyset
 
 
-def fetch_neuprint_bodies(dataset):
+def fetch_neuprint_bodies(dataset, npc):
     """ Create a dictionary (keyed by body ID) and set of bodies from NeuPrint
         Keyword arguments:
           dataset: data set
@@ -266,9 +272,13 @@ def fetch_neuprint_bodies(dataset):
     RETURN n.bodyId as bodyId,n.status as status,n.statusLabel as label,n.type as type,n.instance as instance,n.size as size
     ORDER BY n.type, n.instance
     """
-    print(default_client())
+    try:
+        set_default_client(npc)
+    except Exception as err:
+        terminate_program(err)
+    LOGGER.debug(default_client())
     results = fetch_custom(query, format='json')
-    LOGGER.info("%d Body IDs found in NeuPrint %s", len(results['data']), dataset)
+    LOGGER.info(f"{len(results['data']):,} Body IDs found in NeuPrint {dataset}")
     neuprint_bodyset = set()
     for row in results['data']:
         neuprint_bodyset.add(str(row[0]))
@@ -362,7 +372,7 @@ def insert_bodies(bodies, published, dataset, dataset_uid):
     """
     last_uid = None
     body_payload = get_body_payload_initial(dataset, dataset_uid, published)
-    for body in tqdm(bodies):
+    for body in tqdm(bodies, desc='Inserting bodies'):
         payload = dict(body_payload)
         last_uid = insert_body(payload, body, last_uid)
 
@@ -386,7 +396,7 @@ def update_bodies(bodies, published, dataset, dataset_uid, neuprint_bodyset):
         LOGGER.warning("Bodies to add to Mongo: %d", len(diff))
         body_payload = get_body_payload_initial(dataset, dataset_uid, published)
         last_uid = None
-        for body in tqdm(bodies):
+        for body in tqdm(bodies, desc='Inserting bodies'):
             if body[0] in diff:
                 payload = dict(body_payload)
                 last_uid = insert_body(payload, body, last_uid)
@@ -394,7 +404,7 @@ def update_bodies(bodies, published, dataset, dataset_uid, neuprint_bodyset):
     diff = mongo_bodyset.difference(neuprint_bodyset)
     if diff:
         LOGGER.warning("Bodies to remove from Mongo: %d", len(diff))
-        for body in tqdm(diff):
+        for body in tqdm(diff, desc="Deleting bodies"):
             LOGGER.debug("Delete %s %s", mbodies[body]['_id'], body)
             if ARG.WRITE:
                 DBM['jacs'].emBody.delete_one({"_id": mbodies[body]['_id'],
@@ -402,9 +412,9 @@ def update_bodies(bodies, published, dataset, dataset_uid, neuprint_bodyset):
             COUNT['delete'] += 1
     # Bodies to check for update
     intersection = neuprint_bodyset.intersection(mongo_bodyset)
-    LOGGER.info("Bodies to check for update: %d", len(intersection))
+    LOGGER.info(f"Bodies to check for update: {len(intersection):,}")
     # bodies list: [46377, 'Assign', None, None]
-    for body in tqdm(bodies):
+    for body in tqdm(bodies, desc='Updating bodies'):
         if str(body[0]) not in intersection:
             continue
         mrow = mbodies[str(body[0])]
@@ -412,7 +422,9 @@ def update_bodies(bodies, published, dataset, dataset_uid, neuprint_bodyset):
         # status, status label, type, instance
         for idx in range(1, len(COLUMN)):
             if COLUMN[idx] not in mrow:
-                LOGGER.info("Added new column %s (%s) to %s", COLUMN[idx], body[idx], str(body[0]))
+                LOGGER.debug(f"Added column {COLUMN[idx]} ({body[idx]}) to {body[0]} " \
+                             + f"for {mrow['_id']}")
+                COUNT['added'] += 1
                 payload[COLUMN[idx]] = body[idx]
             elif body[idx] != mrow[COLUMN[idx]]:
                 LOGGER.debug("Change %s from %s to %s for %s", COLUMN[idx],
@@ -430,10 +442,10 @@ def process_dataset(dataset, published=True):
         Returns:
           None
     """
-    dataset_uid, action = setup_dataset(dataset, published)
+    dataset_uid, action, npc = setup_dataset(dataset, published)
     if action == 'ignore' and not ARG.FORCE:
         return
-    bodies, neuprint_bodyset = fetch_neuprint_bodies(dataset)
+    bodies, neuprint_bodyset = fetch_neuprint_bodies(dataset, npc)
     COUNT['neuprint'] += len(bodies)
     # Show a list of statuses
     if ARG.VERBOSE:
@@ -447,7 +459,7 @@ def process_dataset(dataset, published=True):
                     status[body[2]] = 1
             except Exception:
                 status[body[2]] = 1
-        print(f"Statuses: {', '.join(list(status.keys()))}")
+        LOGGER.info(f"Statuses: {', '.join(list(status.keys()))}")
     if action == 'insert':
         insert_bodies(bodies, published, dataset, dataset_uid)
     else:
@@ -494,9 +506,18 @@ def get_metadata():
         if ARG.NEUPRINT == "pre" and dataset in EXISTING_BODY:
             LOGGER.warning("Skipping prepublishing release %s", dataset)
             continue
+        if not ARG.VERBOSE:
+            LOGGER.info(f"Processing {dataset}")
         process_dataset(dataset, '-pre' not in ARG.SERVER)
-    print(COUNT)
-
+    print(f"Bodies in NeuPrint: {COUNT['neuprint']:,}")
+    print(f"Bodies in Mongo:    {COUNT['mongo']:,}")
+    print(f"Bodies inserted:    {COUNT['insert']:,}")
+    print(f"Bodies updated:     {COUNT['update']:,}")
+    if COUNT['added']:
+        print(f"  Columns added:    {COUNT['added']:,}")
+    print(f"Bodies deleted:     {COUNT['delete']:,}")
+    if COUNT['published']:
+        print(f"Bodies already published: {COUNT['published']:,}")
 
 # -----------------------------------------------------------------------------
 
