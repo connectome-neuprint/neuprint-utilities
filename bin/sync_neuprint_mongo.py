@@ -15,7 +15,7 @@ from tqdm import tqdm
 import jrc_common.jrc_common as JRC
 from neuprint import Client, default_client, fetch_custom, fetch_meta, set_default_client
 
-__version__ = "2.0.0"
+__version__ = "2.1.0"
 
 # Configuration
 ARG = LOGGER = None
@@ -524,7 +524,7 @@ def get_metadata():
             continue
         if not ARG.VERBOSE:
             LOGGER.info(f"Processing {dataset}")
-        process_dataset(dataset, '-pre' not in ARG.SERVER)
+        process_dataset(dataset, '-pre' not in ARG.SERVER and '-cns' not in ARG.SERVER
     print(f"Bodies in NeuPrint: {COUNT['neuprint']:,}")
     print(f"Bodies in Mongo:    {COUNT['mongo']:,}")
     print(f"Bodies inserted:    {COUNT['insert']:,}")
