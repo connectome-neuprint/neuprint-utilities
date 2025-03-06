@@ -5,6 +5,7 @@ import argparse
 from datetime import datetime, timezone
 from operator import attrgetter
 import os
+import re
 import socket
 import sys
 import time
@@ -14,8 +15,10 @@ from tqdm import tqdm
 import jrc_common.jrc_common as JRC
 from neuprint import Client, default_client, fetch_custom, fetch_meta, set_default_client
 
+__version__ = "2.0.0"
 
 # Configuration
+ARG = LOGGER = None
 CONFIG = {'config': {}}
 COUNT = {'mongo': 0, 'neuprint': 0, 'delete': 0, 'insert': 0, 'update': 0,
          'added': 0, 'published': 0}
@@ -28,7 +31,7 @@ EXISTING_BODY = {}
 COLUMN = ["name", "status", "statusLabel", "neuronType", "neuronInstance", "voxelSize"]
 INT_COLUMN = ["voxelSize"]
 
-# pylint: disable=W0703,C0209,W1203
+# pylint: disable=broad-exception-caught,logging-fstring-interpolation,logging-not-lazy
 
 # -----------------------------------------------------------------------------
 
@@ -147,19 +150,38 @@ def to_datetime(dt_string):
         Returns:
           datetime object
     """
-    dt_string = dt_string.replace("Timestamp:", "")
-    if " /" in dt_string:
-        dt_string = dt_string.split(" /")[0]
-    dt_string = dt_string.split(".")[0]
+    field = re.findall(r"\d{4}-\d{2}-\d{2}[T ]\d{2}:\d{2}:\d{2}", dt_string)
+    if not field:
+        terminate_program(f"Could not parse datetime string {dt_string}")
+    dt_string = sorted(field)[-1]
     try:
-        if 'Z' in dt_string:
-            dt_string = dt_string.replace("Z", "+0000")
-            dt_aware = datetime.strptime(dt_string.replace('T', ' '), "%Y-%m-%d %H:%M:%S.%f%z")
-            dt_aware = dt_aware.replace(tzinfo=timezone.utc).astimezone(tz=None)
-            return dt_aware.replace(tzinfo=None)
+        converted = datetime.strptime(dt_string.replace('T', ' '), "%Y-%m-%d %H:%M:%S")
     except Exception as _:
         terminate_program(f"Could not parse datetime string {dt_string}")
-    return datetime.strptime(dt_string.replace('T', ' '), "%Y-%m-%d %H:%M:%S")
+    return converted
+
+
+def insert_record(payload, coll, dataset, last_uid, result):
+    """ Insert a data set in Mongo
+        Keyword arguments:
+          payload: data set payload
+          coll: collection
+          dataset: data set
+          last_uid: last UID assigned
+          result: NeuPrint result
+        Returns:
+          None
+    """
+    payload['_id'] = last_uid
+    LOGGER.debug(payload)
+    if ARG.WRITE:
+        post_id = coll.insert_one(payload).inserted_id
+    else:
+        post_id = last_uid
+    if post_id != last_uid:
+        terminate_program(f"Could not insert to Mongo with requested _id {last_uid}")
+    LOGGER.info(f"Inserted data set {dataset} (UID: {post_id}, datetime: " \
+                + f"{result['lastDatabaseEdit']})")
 
 
 def setup_dataset(dataset, published):
@@ -171,7 +193,7 @@ def setup_dataset(dataset, published):
           last_uid: last UID assigned
           action: what to do with bodies in this data set (ignore, insert, or update)
     """
-    LOGGER.debug(f"Initializing Client for {ARG.SERVER} {dataset}")
+    LOGGER.info(f"Initializing Client for {ARG.SERVER} {dataset}")
     npc = Client(ARG.SERVER, dataset=dataset)
     try:
         set_default_client(npc)
@@ -184,6 +206,8 @@ def setup_dataset(dataset, published):
     else:
         name = dataset
         version = ''
+    if 'uuid' not in result:
+        result['uuid'] = None
     LOGGER.info(f"Found NeuPrint dataset {name}:{version} ({result['uuid']}) " \
                 + f"{result['lastDatabaseEdit']}")
     coll = DBM['jacs'].emDataSet
@@ -198,28 +222,19 @@ def setup_dataset(dataset, published):
                    "ownerKey": "group:flyem", "readers": ["group:flyem"],
                    "writers": ["group:flyem"],
                    "name" : result['dataset'], "version": version,
-                   "uuid": result['uuid'],
                    "gender": attrgetter(f"{result['dataset']}.gender")(emattr),
                    "anatomicalArea": attrgetter(f"{result['dataset']}.anatomicalArea")(emattr),
+                   "lastDatabaseEdit": result['lastDatabaseEdit'],
                    "creationDate": to_datetime(result['lastDatabaseEdit']),
                    "updatedDate": to_datetime(result['lastDatabaseEdit']),
+                   "uuid": result['uuid'],
                    "active": True,
                    "published": published
                   }
         if published:
             payload['readers'] = ["group:flyem", "group:workstation_users"]
         last_uid = generate_uid()
-        payload['_id'] = last_uid
-        LOGGER.debug(payload)
-        if ARG.WRITE:
-            post_id = coll.insert_one(payload).inserted_id
-        else:
-            post_id = last_uid
-        if post_id != last_uid:
-            LOGGER.critical("Could not insert to Mongo with requested _id")
-            sys.exit(-1)
-        LOGGER.info(f"Inserted data set {dataset} (UID: {post_id}, datetime: " \
-                    + f"{result['lastDatabaseEdit']})")
+        insert_record(payload, coll, dataset, last_uid, result)
         action = 'insert'
     else:
         LOGGER.debug(f"{dataset} already exists in Mongo (UID: {check['_id']})")
@@ -228,7 +243,8 @@ def setup_dataset(dataset, published):
         if neuprint_dt > check['updatedDate'] or ARG.FORCE:
             LOGGER.warning("Update required for %s (last changed %s)",
                            dataset, result['lastDatabaseEdit'])
-            payload = {"updatedDate": datetime.now(), "active": True,
+            payload = {"lastDatabaseEdit": result['lastDatabaseEdit'],
+                       "updatedDate": datetime.now(), "active": True,
                        "uuid": result["uuid"]}
             if ARG.WRITE:
                 coll.update_one({"_id": check['_id']},
@@ -479,7 +495,7 @@ def get_public_body_ids():
     CONFIG['neuprint'] = {'url': ARG.SERVER + '/api/'}
     response = call_responder('neuprint', 'dbmeta/datasets')
     for dataset in response:
-        # For now, just sage the names of the data set
+        # For now, just save the names of the data set
         EXISTING_BODY[dataset] = 1
         # Client(ARG.SERVER, dataset=dataset)
         # bodies, neuprint_bodyset = fetch_neuprint_bodies(dataset)
@@ -531,7 +547,7 @@ if __name__ == '__main__':
     PARSER.add_argument('--neuprint', dest='NEUPRINT', action='store',
                         choices=['prod', 'pre'], default='prod', help='NeuPrint instance')
     PARSER.add_argument('--manifold', dest='MANIFOLD', action='store',
-                        choices=['dev', 'prod', 'local'], default='dev', help='Manifold')
+                        choices=['dev', 'prod', 'local'], default='prod', help='Manifold')
     PARSER.add_argument('--force', dest='FORCE', action='store_true',
                         default=False, help='Force update')
     PARSER.add_argument('--write', dest='WRITE', action='store_true',
