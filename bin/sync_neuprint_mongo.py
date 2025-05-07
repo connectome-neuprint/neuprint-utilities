@@ -9,13 +9,15 @@ import re
 import socket
 import sys
 import time
+import inquirer
+from inquirer.themes import BlueComposure
 import MySQLdb
 import requests
 from tqdm import tqdm
 import jrc_common.jrc_common as JRC
 from neuprint import Client, default_client, fetch_custom, fetch_meta, set_default_client
 
-__version__ = "2.1.1"
+__version__ = "3.0.0"
 
 # Configuration
 ARG = LOGGER = None
@@ -227,6 +229,7 @@ def setup_dataset(dataset, published):
                    "lastDatabaseEdit": result['lastDatabaseEdit'],
                    "creationDate": to_datetime(result['lastDatabaseEdit']),
                    "updatedDate": to_datetime(result['lastDatabaseEdit']),
+                   "server": ARG.SERVER,
                    "uuid": result['uuid'],
                    "active": True,
                    "published": published
@@ -245,7 +248,7 @@ def setup_dataset(dataset, published):
                            dataset, result['lastDatabaseEdit'])
             payload = {"lastDatabaseEdit": result['lastDatabaseEdit'],
                        "updatedDate": datetime.now(), "active": True,
-                       "uuid": result["uuid"]}
+                       "uuid": result["uuid"], "server": ARG.SERVER}
             if ARG.WRITE:
                 coll.update_one({"_id": check['_id']},
                                 {"$set": payload})
@@ -510,21 +513,42 @@ def get_metadata():
         Returns:
           None
     """
-    if not ARG.SERVER:
+    specified_server = False
+    if ARG.SERVER:
+        specified_server = ARG.SERVER
+    else:
         ARG.SERVER = f"https://neuprint{'-pre' if ARG.NEUPRINT == 'pre' else ''}.janelia.org"
     if ARG.NEUPRINT == "pre":
         get_public_body_ids()
     CONFIG['neuprint'] = {'url': ARG.SERVER + '/api/'}
     response = call_responder('neuprint', 'dbmeta/datasets')
-    for dataset in response:
-        if ARG.RELEASE and ARG.RELEASE != dataset:
-            continue
-        if ARG.NEUPRINT == "pre" and dataset in EXISTING_BODY:
-            LOGGER.warning("Skipping prepublishing release %s", dataset)
-            continue
-        if not ARG.VERBOSE:
-            LOGGER.info(f"Processing {dataset}")
-        process_dataset(dataset, '-pre' not in ARG.SERVER and '-cns' not in ARG.SERVER)
+    if specified_server and (not ARG.RELEASE):
+        releases = []
+        for dataset in response:
+            releases.append(dataset)
+            quest = [(inquirer.Checkbox('checklist', carousel=True,
+                                message='Select releases to process',
+                                choices=sorted(releases)))]
+        try:
+            ans = inquirer.prompt(quest, theme=BlueComposure())
+        except KeyboardInterrupt:
+            terminate_program("User cancelled program")
+        if not ans['checklist']:
+            terminate_program("No releases selected")
+        for dataset in ans['checklist']:
+            if not ARG.VERBOSE:
+                LOGGER.info(f"Processing {dataset}")
+            process_dataset(dataset, '-pre' not in ARG.SERVER and '-cns' not in ARG.SERVER)
+    else:
+        for dataset in response:
+            if ARG.RELEASE and ARG.RELEASE != dataset:
+                continue
+            if ARG.NEUPRINT == "pre" and dataset in EXISTING_BODY:
+                LOGGER.warning("Skipping prepublishing release %s", dataset)
+                continue
+            if not ARG.VERBOSE:
+                LOGGER.info(f"Processing {dataset}")
+            process_dataset(dataset, '-pre' not in ARG.SERVER and '-cns' not in ARG.SERVER)
     print(f"Bodies in NeuPrint: {COUNT['neuprint']:,}")
     print(f"Bodies in Mongo:    {COUNT['mongo']:,}")
     print(f"Bodies inserted:    {COUNT['insert']:,}")
