@@ -17,13 +17,14 @@ from tqdm import tqdm
 import jrc_common.jrc_common as JRC
 from neuprint import Client, default_client, fetch_custom, fetch_meta, set_default_client
 
-__version__ = "3.0.0"
+__version__ = "4.0.0"
 
 # Configuration
 ARG = LOGGER = None
 CONFIG = {'config': {}}
 COUNT = {'mongo': 0, 'neuprint': 0, 'delete': 0, 'insert': 0, 'update': 0,
-         'added': 0, 'published': 0}
+         'added': 0, 'changed': 0, 'published': 0}
+CHANGES = {'added': [], 'changed': []}
 JWT = 'NEUPRINT_APPLICATION_CREDENTIALS'
 KEYS = {}
 # Database
@@ -244,8 +245,8 @@ def setup_dataset(dataset, published):
         last_uid = check['_id']
         neuprint_dt = to_datetime(result['lastDatabaseEdit'])
         if neuprint_dt > check['updatedDate'] or ARG.FORCE:
-            LOGGER.warning("Update required for %s (last changed %s)",
-                           dataset, result['lastDatabaseEdit'])
+            LOGGER.warning(f"Update required for {dataset} " \
+                           + f"({check['updatedDate']} -> {neuprint_dt})")
             payload = {"lastDatabaseEdit": result['lastDatabaseEdit'],
                        "updatedDate": datetime.now(), "active": True,
                        "uuid": result["uuid"], "server": ARG.SERVER}
@@ -441,13 +442,17 @@ def update_bodies(bodies, published, dataset, dataset_uid, neuprint_bodyset):
         # status, status label, type, instance
         for idx in range(1, len(COLUMN)):
             if COLUMN[idx] not in mrow:
-                LOGGER.debug(f"Added column {COLUMN[idx]} ({body[idx]}) to {body[0]} " \
-                             + f"for {mrow['_id']}")
+                msg = f"Added column {COLUMN[idx]} ({body[idx]}) to {body[0]} " \
+                      + f"for {mrow['_id']}"
+                CHANGES['added'].append(msg)
+                LOGGER.debug(msg)
                 COUNT['added'] += 1
                 payload[COLUMN[idx]] = body[idx]
             elif body[idx] != mrow[COLUMN[idx]]:
-                LOGGER.debug("Change %s from %s to %s for %s", COLUMN[idx],
-                             mrow[COLUMN[idx]], body[idx], str(body[0]))
+                msg = f"Change {COLUMN[idx]} from {mrow[COLUMN[idx]]} to {body[idx]} for {body[0]}"
+                CHANGES['added'].append(msg)
+                LOGGER.debug(msg)
+                COUNT['changed'] += 1
                 payload[COLUMN[idx]] = body[idx]
         if payload:
             update_body(mrow["_id"], payload)
@@ -506,6 +511,41 @@ def get_public_body_ids():
     ARG.SERVER = save_server
 
 
+def select_releases(response):
+    """ Select releases to process
+        Keyword arguments:
+          response: list of releases from NeuPrint
+        Returns:
+          selected_releases: list of selected releases
+    """
+    loaded_releases = []
+    try:
+        rows = DBM['jacs'].emDataSet.find({"server": ARG.SERVER})
+    except Exception as err:
+        terminate_program(err)
+    for row in rows:
+        dset = f"{row['name']}:v{row['version']}"
+        if dset not in response:
+            continue
+        loaded_releases.append(dset)
+    if ARG.UPDATE:
+        return loaded_releases
+    releases = []
+    for dataset in response:
+        releases.append(dataset)
+        quest = [(inquirer.Checkbox('checklist', carousel=True,
+                                    message='Select releases to process',
+                                    choices=sorted(releases),
+                                    default=loaded_releases))]
+    try:
+        ans = inquirer.prompt(quest, theme=BlueComposure())
+    except KeyboardInterrupt:
+        terminate_program("User cancelled program")
+    if not ans['checklist']:
+        terminate_program("No releases selected")
+    return ans['checklist']
+
+
 def get_metadata():
     """ Update data in MongoDB for data sets known to one NeuPrint server
         Keyword arguments:
@@ -513,29 +553,16 @@ def get_metadata():
         Returns:
           None
     """
-    specified_server = False
-    if ARG.SERVER:
-        specified_server = ARG.SERVER
-    else:
-        ARG.SERVER = f"https://neuprint{'-pre' if ARG.NEUPRINT == 'pre' else ''}.janelia.org"
+    if not ARG.SERVER:
+        ARG.SERVER = "https://neuprint" \
+                     + f"{'-'+ARG.NEUPRINT if ARG.NEUPRINT != 'prod' else ''}.janelia.org"
     if ARG.NEUPRINT == "pre":
         get_public_body_ids()
     CONFIG['neuprint'] = {'url': ARG.SERVER + '/api/'}
     response = call_responder('neuprint', 'dbmeta/datasets')
-    if specified_server and (not ARG.RELEASE):
-        releases = []
-        for dataset in response:
-            releases.append(dataset)
-            quest = [(inquirer.Checkbox('checklist', carousel=True,
-                                message='Select releases to process',
-                                choices=sorted(releases)))]
-        try:
-            ans = inquirer.prompt(quest, theme=BlueComposure())
-        except KeyboardInterrupt:
-            terminate_program("User cancelled program")
-        if not ans['checklist']:
-            terminate_program("No releases selected")
-        for dataset in ans['checklist']:
+    if not ARG.RELEASE:
+        selected_releases = select_releases(response)
+        for dataset in selected_releases:
             if not ARG.VERBOSE:
                 LOGGER.info(f"Processing {dataset}")
             process_dataset(dataset, '-pre' not in ARG.SERVER and '-cns' not in ARG.SERVER)
@@ -555,9 +582,16 @@ def get_metadata():
     print(f"Bodies updated:     {COUNT['update']:,}")
     if COUNT['added']:
         print(f"  Columns added:    {COUNT['added']:,}")
+    if COUNT['changed']:
+        print(f"  Columns changed:  {COUNT['changed']:,}")
     print(f"Bodies deleted:     {COUNT['delete']:,}")
     if COUNT['published']:
         print(f"Bodies already published: {COUNT['published']:,}")
+    for fileout in ['added', 'changed']:
+        if CHANGES[fileout]:
+            with open(f"body_columns_{fileout}.txt", "w", encoding='utf-8') as f:
+                for msg in CHANGES[fileout]:
+                    f.write(msg + "\n")
 
 # -----------------------------------------------------------------------------
 
@@ -569,9 +603,11 @@ if __name__ == '__main__':
     PARSER.add_argument('--server', dest='SERVER', action='store',
                         help='NeuPrint custom server URL')
     PARSER.add_argument('--neuprint', dest='NEUPRINT', action='store',
-                        choices=['prod', 'pre'], default='prod', help='NeuPrint instance')
+                        choices=['prod', 'cns', 'pre'], default='prod', help='NeuPrint instance')
     PARSER.add_argument('--manifold', dest='MANIFOLD', action='store',
                         choices=['dev', 'prod', 'local'], default='prod', help='Manifold')
+    PARSER.add_argument('--update', dest='UPDATE', action='store_true',
+                        default=False, help='Attempt to update releases already in MongoDB')
     PARSER.add_argument('--force', dest='FORCE', action='store_true',
                         default=False, help='Force update')
     PARSER.add_argument('--write', dest='WRITE', action='store_true',
@@ -585,4 +621,4 @@ if __name__ == '__main__':
     initialize_program()
     LOCAL_TIMEZONE = datetime.now(timezone.utc).astimezone().tzinfo
     get_metadata()
-    sys.exit(0)
+    terminate_program()
