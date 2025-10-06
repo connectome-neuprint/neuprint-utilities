@@ -9,6 +9,8 @@
 ## Summary
 Utility programs for NeuPrint
 
+## Running sync with docker
+
 ### Create docker container for sync-neuprint
 ```
  docker build -t sync_neuprint:1.0 .
@@ -20,7 +22,35 @@ Create a file named .env that contains NEUPRINT_APPLICATION_CREDENTIALS environm
 
 ```
 docker run -it --env-file .env sync_neuprint \
-python /app/scripts/sync_neuprint_mongo.py --v --manifold dev --neuprint pre --debug
+python /app/scripts/sync_neuprint_mongo.py --verbose
 ```
+
+## Running sync with a virtual environment
+
+### Create virtual environment
+```
+python3 -m venv venv
+source venv/bin/activate
+pip install -r requirements.txt
+```
+
+### Running in a virtual environment
+
+```
+venv/bin/python3 sync_neuprint_mongo.py --verbose
+```
+
+## Sync program notes
+
+If the sync_neuprint_mongo.py command is run with defaults, it will:
+
+1. Update the production manifold of the jacs MongoDB database
+2. Use neuprint.janelia.org as the NeuPrint server
+3. Prompt the user for releases to update (or add)
+
+If you want to change the NeuPrint server to sync from, enter which one with --neuprint:
+
+- --neuprint cns will use neuprint-cns.janelia.org
+- --neuprint pre will use neuprint-pre.janelia.org
 
 For more information, see the [Wiki](https://github.com/connectome-neuprint/neuprint-utilities/wiki)
