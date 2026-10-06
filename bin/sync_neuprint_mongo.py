@@ -17,7 +17,7 @@ from tqdm import tqdm
 import jrc_common.jrc_common as JRC
 from neuprint import Client, default_client, fetch_custom, fetch_meta, set_default_client
 
-__version__ = "4.0.0"
+__version__ = "4.1.0"
 
 # Configuration
 ARG = LOGGER = None
@@ -25,7 +25,7 @@ CONFIG = {'config': {}}
 COUNT = {'mongo': 0, 'neuprint': 0, 'delete': 0, 'insert': 0, 'update': 0,
          'added': 0, 'changed': 0, 'published': 0}
 CHANGES = {'added': [], 'changed': []}
-JWT = 'NEUPRINT_APPLICATION_CREDENTIALS'
+JWT = 'DSG_SA_NEUPRINT_NEURONBRIDGE_TOKEN'
 KEYS = {}
 # Database
 DBM = {}
@@ -61,15 +61,10 @@ def call_responder(server, endpoint):
           JSON
     """
     url = CONFIG[server]['url'] + endpoint
-    authenticate = server == 'neuprint'
     try:
-        if authenticate:
-            headers = {"Content-Type": "application/json",
-                       "Authorization": "Bearer " + os.environ[JWT]}
-        if authenticate:
-            req = requests.get(url, headers=headers, timeout=10)
-        else:
-            req = requests.get(url, timeout=10)
+        headers = {"Content-Type": "application/json",
+                   "Authorization": "Bearer " + os.environ[JWT]}
+        req = requests.get(url, headers=headers, timeout=10)
     except requests.exceptions.RequestException as err:
         LOGGER.critical(err)
         sys.exit(-1)
