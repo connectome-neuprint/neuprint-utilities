@@ -20,7 +20,7 @@ import jrc_common.jrc_common as JRC
 # pylint: disable=broad-exception-caught,logging-fstring-interpolation
 
 # Environment
-JWT = "NEUPRINT_APPLICATION_CREDENTIALS"
+JWT = "DSG_SA_NEUPRINT_NEURONBRIDGE_TOKEN"
 # Counters
 COUNT = collections.defaultdict(lambda: 0, {})
 # Globals
